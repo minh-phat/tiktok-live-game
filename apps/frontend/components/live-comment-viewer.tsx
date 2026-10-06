@@ -259,15 +259,31 @@ const phoneSeatPositions = [
   [18, 87], [50, 87], [82, 87],
 ];
 
+const staffDialogues = [
+  { speaker: 'owner', name: 'Cô chủ Hương', message: 'Lan ơi, mang cà phê sữa đá ra bàn mới nhé!' },
+  { speaker: 'maid', name: 'Lan', message: 'Dạ cô, cà phê phin vừa nhỏ xong đây ạ!' },
+  { speaker: 'executive', name: 'Minh', message: 'Bàn bên kia cần thêm trà đá, để tôi lo.' },
+  { speaker: 'owner', name: 'Cô chủ Hương', message: 'Nhớ kê ghế gọn cho khách mới vào nha.' },
+  { speaker: 'maid', name: 'Lan', message: 'Em mời cả nhà dùng cà phê, ngồi sát vào cho vui!' },
+  { speaker: 'executive', name: 'Minh', message: 'Cà phê đen ít đường của anh đây. Chúc anh ngon miệng.' },
+] as const;
+
 function Scene({ theme, guests, comments, viewMode }: { theme: Theme; guests: Guest[]; comments: Comment[]; viewMode: ViewMode }) {
   const [now, setNow] = useState(Date.now());
   useEffect(() => { const timer = window.setInterval(() => setNow(Date.now()), 500); return () => clearInterval(timer); }, []);
+  const dialogue = staffDialogues[Math.floor(now / 6000) % staffDialogues.length];
+  const showStaffBubble = now % 6000 < 5000;
   return <div className={`scene ${theme} scene-${viewMode}`}>
     <div className="scene-sky"><span className="moon" /><span className="star star-one">✦</span><span className="star star-two">✧</span><span className="star star-three">✦</span></div>
     <div className="shop-front"><div className="shop-roof" /><div className="shop-sign">{theme === 'sidewalk-cafe' ? 'CÀ PHÊ · GÓC PHỐ' : 'PHÒNG TRÀ · ĐÊM NAY'}</div><div className="shop-awning" /><div className="shop-window"><span>☕</span></div><div className="shop-door"><div className="door-glow" /></div><div className="shop-window second"><span>{theme === 'sidewalk-cafe' ? '✳' : '♫'}</span></div></div>
     <div className="scene-lamps"><div className="lamp left" /><div className="lamp right" /></div>
     <div className="pavement" /><div className="street-line" />
     <div className="table table-one"><span>☕</span></div><div className="table table-two"><span>☕</span></div><div className="table table-three"><span>☕</span></div>
+    {theme === 'sidewalk-cafe' && <div className="cafe-staff" aria-label="Nhân viên quán cà phê">
+      <div className="staff-member staff-owner"><img src="/characters/cafe-owner.png" alt="Cô chủ Hương đang pha cà phê" />{showStaffBubble && dialogue.speaker === 'owner' && <div className="staff-bubble"><strong>{dialogue.name}</strong>{dialogue.message}</div>}</div>
+      <div className="staff-member staff-maid"><img src="/characters/maid-server-v2.png" alt="Lan đang phục vụ cà phê" />{showStaffBubble && dialogue.speaker === 'maid' && <div className="staff-bubble"><strong>{dialogue.name}</strong>{dialogue.message}</div>}</div>
+      <div className="staff-member staff-executive"><img src="/characters/executive-server-v2.png" alt="Minh đang phục vụ cà phê" />{showStaffBubble && dialogue.speaker === 'executive' && <div className="staff-bubble"><strong>{dialogue.name}</strong>{dialogue.message}</div>}</div>
+    </div>}
     {guests.map((guest) => {
       const positions = viewMode === 'phone' ? phoneSeatPositions : seatPositions;
       const [left, top] = positions[guest.seat] ?? positions[0];
