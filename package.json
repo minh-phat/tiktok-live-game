@@ -12,7 +12,9 @@
     "dev:frontend": "npm run dev -w @tiktok-live/frontend",
     "build": "npm run build -w @tiktok-live/backend && npm run build -w @tiktok-live/frontend",
     "start": "concurrently -n backend,frontend -c blue,magenta \"npm run start -w @tiktok-live/backend\" \"npm run start -w @tiktok-live/frontend\"",
-    "check": "npm run typecheck -w @tiktok-live/backend && npm run typecheck -w @tiktok-live/frontend"
+    "check": "npm run typecheck -w @tiktok-live/backend && npm run typecheck -w @tiktok-live/frontend",
+    "migrate:json": "npm run migrate:json -w @tiktok-live/backend",
+    "test:integration": "npm run test:integration -w @tiktok-live/backend"
   },
   "engines": {
     "node": ">=20"

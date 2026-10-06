@@ -6,14 +6,18 @@
     "build": "nest build",
     "dev": "nest start --watch",
     "start": "node dist/main.js",
+    "migrate:json": "npm run build && node dist/scripts/migrate-json.js",
+    "test:integration": "npm run build && node test/mongo.integration.mjs",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@nestjs/common": "^11.1.6",
+    "@nestjs/config": "^4.0.4",
     "@nestjs/core": "^11.1.6",
     "@nestjs/platform-express": "^11.1.6",
     "@nestjs/platform-socket.io": "^11.1.6",
     "@nestjs/websockets": "^11.1.6",
+    "mongodb": "^6.21.0",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.2",
     "socket.io": "^4.8.1",
@@ -21,7 +25,9 @@
   },
   "devDependencies": {
     "@nestjs/cli": "^11.0.10",
+    "@types/express": "^5.0.3",
     "@types/node": "^24.7.0",
+    "socket.io-client": "^4.8.1",
     "typescript": "^5.9.3"
   }
 }

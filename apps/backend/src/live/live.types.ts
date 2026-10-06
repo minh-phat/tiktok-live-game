@@ -1,3 +1,14 @@
+export type RoomTheme = 'sidewalk-cafe' | 'tea-room';
+
+export interface LiveRoom {
+  id: string;
+  ownerId: string;
+  name: string;
+  theme: RoomTheme;
+  tiktokUsername: string;
+  createdAt: string;
+}
+
 export interface LiveStatus {
   state: 'connected' | 'connecting' | 'disconnected';
   message: string;
@@ -5,8 +16,18 @@ export interface LiveStatus {
   roomId?: string;
 }
 
+export interface LiveGuest {
+  id: string;
+  username: string;
+  nickname: string;
+  avatar: string;
+  seat: number;
+  joinedAt: number;
+}
+
 export interface LiveComment {
   id: string;
+  guestId: string;
   username: string;
   nickname: string;
   avatar: string;
@@ -14,11 +35,15 @@ export interface LiveComment {
   timestamp: number;
 }
 
-export interface ConnectPayload {
-  username?: string;
+export interface RoomSnapshot {
+  status: LiveStatus;
+  guests: LiveGuest[];
+  comments: LiveComment[];
+  viewers: number | null;
 }
 
-export interface SocketReply {
+export interface SocketReply<T = undefined> {
   ok: boolean;
   message?: string;
+  data?: T;
 }

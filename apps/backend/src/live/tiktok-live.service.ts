@@ -1,28 +1,164 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, OnModuleDestroy } from '@nestjs/common';
 import { ControlEvent, TikTokLiveConnection, WebcastEvent } from 'tiktok-live-connector';
 import type { Server } from 'socket.io';
+import type { LiveComment, LiveGuest, LiveRoom, LiveStatus, RoomSnapshot } from './live.types';
+
+interface LiveSession {
+  connection: TikTokLiveConnection | null;
+  attempt: number;
+  status: LiveStatus;
+  guests: LiveGuest[];
+  comments: LiveComment[];
+  viewers: number | null;
+}
+
+const MAX_GUESTS = 12;
+const MAX_COMMENTS = 100;
 
 @Injectable()
-export class TikTokLiveService {
+export class TikTokLiveService implements OnModuleDestroy {
   private readonly logger = new Logger(TikTokLiveService.name);
-  private liveConnection: TikTokLiveConnection | null = null;
-  private connectedUsername = '';
-  private connectionAttempt = 0;
+  private readonly sessions = new Map<string, LiveSession>();
   private server: Server | null = null;
 
-  setServer(server: Server) {
-    this.server = server;
+  setServer(server: Server) { this.server = server; }
+
+  private session(roomId: string): LiveSession {
+    let session = this.sessions.get(roomId);
+    if (!session) {
+      session = {
+        connection: null, attempt: 0,
+        status: { state: 'disconnected', message: 'Chưa kết nối TikTok LIVE' },
+        guests: [], comments: [], viewers: null,
+      };
+      this.sessions.set(roomId, session);
+    }
+    return session;
   }
 
-  getStatus() {
-    return this.connectedUsername
-      ? { state: 'connected' as const, username: this.connectedUsername, message: `Đã kết nối @${this.connectedUsername}` }
-      : { state: 'disconnected' as const, message: 'Chưa kết nối phòng LIVE' };
+  snapshot(roomId: string): RoomSnapshot {
+    const session = this.session(roomId);
+    return {
+      status: session.status,
+      guests: [...session.guests],
+      comments: [...session.comments],
+      viewers: session.viewers,
+    };
   }
 
-  cleanUsername(value = '') {
-    const match = String(value).trim().match(/(?:tiktok\.com\/@)?@?([\w.-]+)/i);
-    return match?.[1]?.slice(0, 64) ?? '';
+  private emit(roomId: string, event: string, payload: unknown) {
+    this.server?.to(`room:${roomId}`).emit(event, payload);
+  }
+
+  private setStatus(roomId: string, status: LiveStatus) {
+    this.session(roomId).status = status;
+    this.emit(roomId, 'live:status', status);
+  }
+
+  private upsertGuest(roomId: string, user: { userId?: string | number | bigint | null; uniqueId?: string | null; displayId?: string | null; nickname?: string | null; profilePictureUrl?: string | null; avatarThumb?: { urlList?: string[] } | null }): LiveGuest | null {
+    const session = this.session(roomId);
+    const username = String(user.uniqueId ?? user.displayId ?? '').trim();
+    const id = String(user.userId ?? username).trim();
+    if (!id) return null;
+    const existing = session.guests.find((guest) => guest.id === id);
+    if (existing) return existing;
+    const usedSeats = new Set(session.guests.map((guest) => guest.seat));
+    if (session.guests.length >= MAX_GUESTS) {
+      const departed = session.guests.shift();
+      if (departed) {
+        usedSeats.delete(departed.seat);
+        this.emit(roomId, 'live:guest-left', { id: departed.id });
+      }
+    }
+    const seat = Array.from({ length: MAX_GUESTS }, (_, index) => index).find((index) => !usedSeats.has(index)) ?? 0;
+    const guest: LiveGuest = {
+      id,
+      username: username || 'viewer',
+      nickname: String(user.nickname ?? username ?? 'Khách ghé quán'),
+      avatar: String(user.profilePictureUrl ?? user.avatarThumb?.urlList?.[0] ?? ''),
+      seat,
+      joinedAt: Date.now(),
+    };
+    session.guests.push(guest);
+    this.emit(roomId, 'live:guest-joined', guest);
+    return guest;
+  }
+
+  disconnect(roomId: string, reason = 'Đã ngắt kết nối') {
+    const session = this.session(roomId);
+    session.attempt += 1;
+    const connection = session.connection;
+    session.connection = null;
+    if (connection) {
+      try { connection.disconnect(); } catch { /* đã đóng */ }
+    }
+    session.guests = [];
+    session.comments = [];
+    session.viewers = null;
+    this.setStatus(roomId, { state: 'disconnected', message: reason });
+    this.emit(roomId, 'live:reset', { guests: [], comments: [], viewers: null });
+  }
+
+  async connect(room: LiveRoom) {
+    this.disconnect(room.id, 'Đang chuẩn bị kết nối...');
+    const session = this.session(room.id);
+    const attempt = session.attempt;
+    this.setStatus(room.id, { state: 'connecting', username: room.tiktokUsername, message: `Đang kết nối @${room.tiktokUsername}...` });
+    const connection = new TikTokLiveConnection(room.tiktokUsername, {
+      processInitialData: false,
+      fetchRoomInfoOnConnect: true,
+    });
+    session.connection = connection;
+    const isCurrent = () => session.attempt === attempt && session.connection === connection;
+
+    connection.on(WebcastEvent.MEMBER, (data) => {
+      if (isCurrent()) this.upsertGuest(room.id, data.user ?? data);
+    });
+    connection.on(WebcastEvent.CHAT, (data) => {
+      if (!isCurrent()) return;
+      const comment = String(data.content ?? data.comment ?? data.text ?? '').trim();
+      if (!comment) return;
+      const user = data.user ?? data;
+      const guest = this.upsertGuest(room.id, user);
+      if (!guest) return;
+      const item: LiveComment = {
+        id: String(data.common?.msgId ?? data.msgId ?? `${Date.now()}-${Math.random()}`),
+        guestId: guest.id,
+        username: guest.username,
+        nickname: guest.nickname,
+        avatar: guest.avatar,
+        comment,
+        timestamp: Date.now(),
+      };
+      session.comments.unshift(item);
+      session.comments = session.comments.slice(0, MAX_COMMENTS);
+      this.emit(room.id, 'live:comment', item);
+    });
+    connection.on(WebcastEvent.ROOM_USER, (data) => {
+      if (!isCurrent()) return;
+      session.viewers = Number(data.viewerCount ?? data.topViewers?.length ?? 0);
+      this.emit(room.id, 'live:stats', { viewers: session.viewers });
+    });
+    connection.on(WebcastEvent.STREAM_END, () => {
+      if (isCurrent()) this.disconnect(room.id, 'Phiên LIVE đã kết thúc.');
+    });
+    connection.on(ControlEvent.DISCONNECTED, () => {
+      if (isCurrent()) this.disconnect(room.id, 'Mất kết nối với phòng LIVE.');
+    });
+    connection.on(ControlEvent.ERROR, (error) => this.logger.error('Lỗi kết nối TikTok', error));
+
+    try {
+      const state = await connection.connect();
+      if (!isCurrent()) return;
+      this.setStatus(room.id, {
+        state: 'connected', username: room.tiktokUsername,
+        roomId: String(state.roomId ?? ''),
+        message: `Đã kết nối @${room.tiktokUsername}`,
+      });
+    } catch (error) {
+      if (isCurrent()) this.disconnect(room.id, this.publicError(error));
+      throw error;
+    }
   }
 
   publicError(error: unknown) {
@@ -33,69 +169,7 @@ export class TikTokLiveService {
     return 'Không thể kết nối TikTok LIVE. Hãy kiểm tra username và thử lại.';
   }
 
-  async disconnect(reason = 'Đã ngắt kết nối') {
-    this.connectionAttempt += 1;
-    if (this.liveConnection) {
-      try {
-        this.liveConnection.disconnect();
-      } catch {
-        // Kết nối đã được đóng.
-      }
-    }
-    this.liveConnection = null;
-    this.connectedUsername = '';
-    this.server?.emit('live:status', { state: 'disconnected', message: reason });
-  }
-
-  async connect(rawUsername: string) {
-    const username = this.cleanUsername(rawUsername);
-    if (!username) throw new Error('Username TikTok không hợp lệ.');
-
-    await this.disconnect('Đang chuyển phòng LIVE...');
-    const attempt = this.connectionAttempt;
-    const connection = new TikTokLiveConnection(username, {
-      processInitialData: false,
-      fetchRoomInfoOnConnect: true,
-    });
-    this.liveConnection = connection;
-
-    connection.on(WebcastEvent.CHAT, (data) => {
-      const user = data.user ?? data;
-      const comment = data.content ?? data.comment ?? data.text ?? '';
-      if (!comment) {
-        this.logger.warn(`Nhận chat event không có nội dung: ${Object.keys(data).join(', ')}`);
-        return;
-      }
-
-      this.server?.emit('live:comment', {
-        id: String(data.common?.msgId ?? data.msgId ?? `${Date.now()}-${Math.random()}`),
-        username: user.displayId ?? user.uniqueId ?? data.uniqueId ?? 'user',
-        nickname: user.nickname ?? data.nickname ?? user.displayId ?? user.uniqueId ?? 'TikTok user',
-        avatar: user.profilePictureUrl ?? user.avatarThumb?.urlList?.[0] ?? '',
-        comment,
-        timestamp: Date.now(),
-      });
-    });
-
-    connection.on(WebcastEvent.ROOM_USER, (data) => {
-      this.server?.emit('live:stats', { viewers: data.viewerCount ?? data.topViewers?.length ?? null });
-    });
-    connection.on(WebcastEvent.STREAM_END, () => void this.disconnect('Phiên LIVE đã kết thúc.'));
-    connection.on(ControlEvent.DISCONNECTED, () => {
-      if (attempt === this.connectionAttempt) {
-        this.server?.emit('live:status', { state: 'disconnected', message: 'Mất kết nối với phòng LIVE.' });
-      }
-    });
-    connection.on(ControlEvent.ERROR, (error) => this.logger.error('Lỗi kết nối TikTok', error));
-
-    const state = await connection.connect();
-    if (attempt !== this.connectionAttempt) return;
-    this.connectedUsername = username;
-    this.server?.emit('live:status', {
-      state: 'connected',
-      username,
-      roomId: String(state.roomId ?? ''),
-      message: `Đã kết nối @${username}`,
-    });
+  onModuleDestroy() {
+    for (const roomId of this.sessions.keys()) this.disconnect(roomId);
   }
 }
