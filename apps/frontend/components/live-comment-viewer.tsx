@@ -246,18 +246,36 @@ function Avatar({ avatar, name }: { avatar: string; name: string }) {
   return <span className="mini-avatar">{avatar && !failed ? <img src={avatar} alt="" onError={() => setFailed(true)} /> : name.slice(0, 1).toUpperCase()}</span>;
 }
 
-const seatPositions = [
-  [19, 62], [35, 58], [67, 58], [82, 62],
-  [15, 81], [31, 78], [48, 76], [65, 78], [83, 81],
-  [26, 43], [51, 43], [76, 43],
-];
+const MAX_SCENE_GUESTS = 200;
 
-const phoneSeatPositions = [
-  [18, 54], [50, 54], [82, 54],
-  [18, 65], [50, 65], [82, 65],
-  [18, 76], [50, 76], [82, 76],
-  [18, 87], [50, 87], [82, 87],
-];
+function getSeatPosition(seat: number, viewMode: ViewMode) {
+  const columns = viewMode === 'phone' ? 10 : 20;
+  const rows = MAX_SCENE_GUESTS / columns;
+  const slot = ((seat % MAX_SCENE_GUESTS) * 73 + 19) % MAX_SCENE_GUESTS;
+  const column = slot % columns;
+  const row = Math.floor(slot / columns);
+  const leftMin = viewMode === 'phone' ? 7 : 5;
+  const leftMax = viewMode === 'phone' ? 93 : 95;
+  const topMin = viewMode === 'phone' ? 42 : 41;
+  const topMax = viewMode === 'phone' ? 92 : 91;
+  return {
+    left: leftMin + ((column + 0.5) / columns) * (leftMax - leftMin),
+    top: topMin + ((row + 0.5) / rows) * (topMax - topMin),
+    depth: row,
+  };
+}
+
+function getGuestSize(viewMode: ViewMode) {
+  const [width, height] = [76, 104];
+  const phoneScale = viewMode === 'phone' ? 0.8 : 1;
+  return { width: Math.round(width * phoneScale), height: Math.round(height * phoneScale) };
+}
+
+function getCrowdDensity(guestCount: number) {
+  if (guestCount > 100) return 'packed';
+  if (guestCount > 20) return 'busy';
+  return 'normal';
+}
 
 const guestStyles = [
   { src: '/characters/guest-historical.png', label: 'cổ trang' },
@@ -296,7 +314,9 @@ function Scene({ theme, guests, comments, viewMode }: { theme: Theme; guests: Gu
   useEffect(() => { const timer = window.setInterval(() => setNow(Date.now()), 500); return () => clearInterval(timer); }, []);
   const dialogue = staffDialogues[Math.floor(now / 6000) % staffDialogues.length];
   const showStaffBubble = now % 6000 < 5000;
-  return <div className={`scene ${theme} scene-${viewMode}`}>
+  const crowdDensity = getCrowdDensity(guests.length);
+  const guestSize = getGuestSize(viewMode);
+  return <div className={`scene ${theme} scene-${viewMode} crowd-${crowdDensity}`}>
     <div className="scene-sky"><span className="moon" /><span className="star star-one">✦</span><span className="star star-two">✧</span><span className="star star-three">✦</span></div>
     <div className="shop-front"><div className="shop-roof" /><div className="shop-sign">{theme === 'sidewalk-cafe' ? 'CÀ PHÊ · GÓC PHỐ' : 'PHÒNG TRÀ · ĐÊM NAY'}</div><div className="shop-awning" /><div className="shop-window"><span>☕</span></div><div className="shop-door"><div className="door-glow" /></div><div className="shop-window second"><span>{theme === 'sidewalk-cafe' ? '✳' : '♫'}</span></div></div>
     <div className="scene-lamps"><div className="lamp left" /><div className="lamp right" /></div>
@@ -308,14 +328,13 @@ function Scene({ theme, guests, comments, viewMode }: { theme: Theme; guests: Gu
       <div className="staff-member staff-executive"><img src="/characters/executive-server-v2.png" alt="Minh đang phục vụ cà phê" />{showStaffBubble && dialogue.speaker === 'executive' && <div className="staff-bubble"><strong>{dialogue.name}</strong>{dialogue.message}</div>}</div>
     </div>}
     {guests.map((guest) => {
-      const positions = viewMode === 'phone' ? phoneSeatPositions : seatPositions;
-      const [left, top] = positions[guest.seat] ?? positions[0];
+      const { left, top, depth } = getSeatPosition(guest.seat, viewMode);
       const guestStyle = getGuestStyle(guest);
       const latest = comments.find((comment) => comment.guestId === guest.id);
       const showBubble = latest && now - latest.timestamp < 7000;
-      return <div className={`scene-guest chair-${guest.seat % 2}`} key={guest.id} style={{ left: `${left}%`, top: `${top}%` }} title={`@${guest.username}`}>
+      return <div className={`scene-guest chair-${guest.seat % 2}`} key={guest.id} style={{ left: `${left}%`, top: `${top}%`, width: guestSize.width, height: guestSize.height, zIndex: 5 + depth }} title={`@${guest.username}`}>
         {showBubble && <div className="speech-bubble" key={latest.id}>{latest.comment}</div>}
-        <div className="guest-name">{guest.nickname}</div>
+        <div className="guest-name"><Avatar avatar={guest.avatar} name={guest.nickname} /><span>{guest.nickname}</span></div>
         <div className="guest-chair" />
         <div className="guest-character"><img src={guestStyle.src} alt={`${guest.nickname} trong trang phục ${guestStyle.label}`} /></div>
       </div>;

@@ -12,7 +12,7 @@ interface LiveSession {
   viewers: number | null;
 }
 
-const MAX_GUESTS = 12;
+const MAX_GUESTS = 200;
 const MAX_COMMENTS = 100;
 
 @Injectable()
