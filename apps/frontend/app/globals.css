@@ -36,7 +36,7 @@ button { border:0; color:#fff; font:600 13px 'DM Sans'; cursor:pointer; }
 .feed { min-height:390px; margin-top:16px; overflow:hidden; }
 .feed-head { padding:22px 24px; border-bottom:1px solid var(--line); }
 .feed-actions { display:flex; align-items:center; gap:14px; color:var(--muted); font-size:12px; }
-#clear-button { padding:8px 12px; color:#b5b6bd; background:#25262c; border-radius:8px; }
+.feed-actions button { padding:8px 12px; color:#b5b6bd; background:#25262c; border-radius:8px; }
 .comments { max-height:560px; margin:0; padding:0; overflow:auto; list-style:none; }
 .comment { display:flex; gap:13px; padding:17px 24px; border-bottom:1px solid rgba(42,43,49,.7); animation:arrive .28s ease-out; }
 @keyframes arrive { from { opacity:0; transform:translateY(-8px); } }

@@ -1,20 +1,23 @@
 {
-  "name": "tiktok-live-comment-viewer",
+  "name": "tiktok-live-game-project",
   "version": "1.0.0",
   "private": true,
-  "type": "module",
-  "description": "Website JavaScript xem comment TikTok LIVE theo thời gian thực",
+  "description": "TikTok LIVE comment viewer với NestJS và Next.js",
+  "workspaces": [
+    "apps/*"
+  ],
   "scripts": {
-    "start": "node server.js",
-    "dev": "node --watch server.js",
-    "check": "node --check server.js && node --check public/app.js"
+    "dev": "concurrently -n backend,frontend -c blue,magenta \"npm run dev -w @tiktok-live/backend\" \"npm run dev -w @tiktok-live/frontend\"",
+    "dev:backend": "npm run dev -w @tiktok-live/backend",
+    "dev:frontend": "npm run dev -w @tiktok-live/frontend",
+    "build": "npm run build -w @tiktok-live/backend && npm run build -w @tiktok-live/frontend",
+    "start": "concurrently -n backend,frontend -c blue,magenta \"npm run start -w @tiktok-live/backend\" \"npm run start -w @tiktok-live/frontend\"",
+    "check": "npm run typecheck -w @tiktok-live/backend && npm run typecheck -w @tiktok-live/frontend"
   },
   "engines": {
     "node": ">=20"
   },
-  "dependencies": {
-    "express": "^5.1.0",
-    "socket.io": "^4.8.1",
-    "tiktok-live-connector": "^2.5.0"
+  "devDependencies": {
+    "concurrently": "^9.2.1"
   }
 }
