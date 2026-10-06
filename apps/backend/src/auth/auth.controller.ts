@@ -9,10 +9,12 @@ export class AuthController {
   constructor(private readonly auth: AuthService, private readonly gateway: LiveGateway) {}
 
   private setCookie(response: Response, token: string) {
+    const isProduction = process.env.NODE_ENV === 'production';
     response.cookie(SESSION_COOKIE, token, {
       httpOnly: true,
-      sameSite: 'lax',
-      secure: process.env.NODE_ENV === 'production',
+      // Frontend và backend production có thể nằm trên hai domain khác nhau.
+      sameSite: isProduction ? 'none' : 'lax',
+      secure: isProduction,
       path: '/',
       maxAge: 7 * 24 * 60 * 60 * 1000,
     });
@@ -42,7 +44,12 @@ export class AuthController {
     const token = sessionToken(request.headers.cookie);
     await this.auth.logout(token);
     this.gateway.disconnectSession(token);
-    response.clearCookie(SESSION_COOKIE, { path: '/' });
+    const isProduction = process.env.NODE_ENV === 'production';
+    response.clearCookie(SESSION_COOKIE, {
+      path: '/',
+      sameSite: isProduction ? 'none' : 'lax',
+      secure: isProduction,
+    });
     return { ok: true };
   }
 }
