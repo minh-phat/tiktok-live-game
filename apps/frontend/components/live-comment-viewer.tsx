@@ -259,6 +259,29 @@ const phoneSeatPositions = [
   [18, 87], [50, 87], [82, 87],
 ];
 
+const guestStyles = [
+  { src: '/characters/guest-historical.png', label: 'cổ trang' },
+  { src: '/characters/guest-ao-dai.png', label: 'áo dài' },
+  { src: '/characters/guest-schoolgirl.png', label: 'nữ sinh' },
+  { src: '/characters/guest-student.png', label: 'sinh viên' },
+  { src: '/characters/guest-office.png', label: 'công sở' },
+  { src: '/characters/guest-streetwear.png', label: 'đường phố' },
+  { src: '/characters/guest-retro.png', label: 'bà ba hoài cổ' },
+  { src: '/characters/guest-biker.png', label: 'biker' },
+  { src: '/characters/guest-artist.png', label: 'nghệ sĩ' },
+  { src: '/characters/guest-tourist.png', label: 'du lịch' },
+] as const;
+
+function getGuestStyle(guest: Guest) {
+  const key = `${guest.id}:${guest.joinedAt}`;
+  let hash = 2166136261;
+  for (let index = 0; index < key.length; index += 1) {
+    hash ^= key.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+  return guestStyles[(hash >>> 0) % guestStyles.length];
+}
+
 const staffDialogues = [
   { speaker: 'owner', name: 'Cô chủ Hương', message: 'Lan ơi, mang cà phê sữa đá ra bàn mới nhé!' },
   { speaker: 'maid', name: 'Lan', message: 'Dạ cô, cà phê phin vừa nhỏ xong đây ạ!' },
@@ -287,13 +310,14 @@ function Scene({ theme, guests, comments, viewMode }: { theme: Theme; guests: Gu
     {guests.map((guest) => {
       const positions = viewMode === 'phone' ? phoneSeatPositions : seatPositions;
       const [left, top] = positions[guest.seat] ?? positions[0];
+      const guestStyle = getGuestStyle(guest);
       const latest = comments.find((comment) => comment.guestId === guest.id);
       const showBubble = latest && now - latest.timestamp < 7000;
       return <div className={`scene-guest chair-${guest.seat % 2}`} key={guest.id} style={{ left: `${left}%`, top: `${top}%` }} title={`@${guest.username}`}>
         {showBubble && <div className="speech-bubble" key={latest.id}>{latest.comment}</div>}
         <div className="guest-name">{guest.nickname}</div>
         <div className="guest-chair" />
-        <div className={`guest-character variant-${guest.seat % 6}`}><div className="guest-head">{guest.avatar ? <Avatar avatar={guest.avatar} name={guest.nickname} /> : <span>{guest.nickname.slice(0, 1).toUpperCase()}</span>}</div><div className="guest-body" /><div className="guest-legs" /></div>
+        <div className="guest-character"><img src={guestStyle.src} alt={`${guest.nickname} trong trang phục ${guestStyle.label}`} /></div>
       </div>;
     })}
     {guests.length === 0 && <div className="scene-placeholder"><span>☕</span><strong>Quán đang chờ khách</strong><small>Khách vào LIVE sẽ xuống quán và tìm ghế ngồi.</small></div>}
