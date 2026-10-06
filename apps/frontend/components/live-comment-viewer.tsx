@@ -1,9 +1,10 @@
 'use client';
 
-import { useEffect, useState, type FormEvent } from 'react';
+import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { io, type Socket } from 'socket.io-client';
 
 type Theme = 'sidewalk-cafe' | 'tea-room';
+type ViewMode = 'desktop' | 'phone';
 type Status = { state: 'connected' | 'connecting' | 'disconnected'; message: string; username?: string };
 type User = { id: string; name: string; email: string };
 type Room = { id: string; name: string; theme: Theme; tiktokUsername: string; createdAt: string };
@@ -173,6 +174,13 @@ function RoomScreen({ room, onBack }: { room: Room; onBack: () => void }) {
   const [comments, setComments] = useState<Comment[]>([]);
   const [viewers, setViewers] = useState<number | null>(null);
   const [error, setError] = useState('');
+  const [viewMode, setViewMode] = useState<ViewMode>('desktop');
+  const stageRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const savedMode = window.localStorage.getItem('live-room-view-mode');
+    if (savedMode === 'desktop' || savedMode === 'phone') setViewMode(savedMode);
+  }, []);
 
   useEffect(() => {
     const connection = io(backendUrl, { withCredentials: true });
@@ -210,12 +218,23 @@ function RoomScreen({ room, onBack }: { room: Room; onBack: () => void }) {
 
   function disconnect() { socket?.emit('live:disconnect', { roomId: room.id }); }
 
+  function changeViewMode(mode: ViewMode) {
+    setViewMode(mode);
+    window.localStorage.setItem('live-room-view-mode', mode);
+  }
+
+  async function openFullscreen() {
+    if (!stageRef.current) return;
+    if (document.fullscreenElement) await document.exitFullscreen();
+    else await stageRef.current.requestFullscreen();
+  }
+
   return (
     <main className="room-page">
-      <div className="room-titlebar"><div><button className="back-button" onClick={onBack}>← Tất cả phòng</button><span className="eyebrow">{room.theme === 'sidewalk-cafe' ? 'CÀ PHÊ VỈA HÈ' : 'PHÒNG TRÀ'} / @{room.tiktokUsername}</span><h1>{room.name}</h1></div><div className="room-controls"><span className={`live-pill ${status.state}`}><span />{status.state === 'connected' ? 'ĐANG LIVE' : status.state === 'connecting' ? 'ĐANG KẾT NỐI' : 'CHƯA LIVE'}</span>{status.state === 'connected' ? <button className="secondary-button" onClick={disconnect}>Ngắt kết nối</button> : <button className="primary-button" disabled={status.state === 'connecting'} onClick={reconnect}>Kết nối lại</button>}</div></div>
+      <div className="room-titlebar"><div><button className="back-button" onClick={onBack}>← Tất cả phòng</button><span className="eyebrow">{room.theme === 'sidewalk-cafe' ? 'CÀ PHÊ VỈA HÈ' : 'PHÒNG TRÀ'} / @{room.tiktokUsername}</span><h1>{room.name}</h1></div><div className="room-actions"><div className="view-mode-switch" role="group" aria-label="Chế độ hiển thị"><button type="button" className={viewMode === 'phone' ? 'active' : ''} onClick={() => changeViewMode('phone')} aria-pressed={viewMode === 'phone'}>▯ Điện thoại</button><button type="button" className={viewMode === 'desktop' ? 'active' : ''} onClick={() => changeViewMode('desktop')} aria-pressed={viewMode === 'desktop'}>▭ Desktop</button></div><div className="room-controls"><span className={`live-pill ${status.state}`}><span />{status.state === 'connected' ? 'ĐANG LIVE' : status.state === 'connecting' ? 'ĐANG KẾT NỐI' : 'CHƯA LIVE'}</span>{status.state === 'connected' ? <button className="secondary-button" onClick={disconnect}>Ngắt kết nối</button> : <button className="primary-button" disabled={status.state === 'connecting'} onClick={reconnect}>Kết nối lại</button>}</div></div></div>
       {error && <p className="notice error" role="alert">{error}</p>}
-      <div className="room-layout">
-        <div className="scene-column"><Scene theme={room.theme} guests={guests} comments={comments} /><div className="scene-footer"><span><i className="status-dot" />{status.message}</span><span>{viewers === null ? '—' : viewers.toLocaleString('vi-VN')} người xem TikTok · {guests.length} khách trong quán</span></div></div>
+      <div className={`room-layout ${viewMode}-view`}>
+        <div className="scene-column"><div className="stream-stage" ref={stageRef}><Scene theme={room.theme} guests={guests} comments={comments} viewMode={viewMode} /><div className="stream-hud"><span className={`stream-live ${status.state}`}>● {status.state === 'connected' ? 'LIVE' : 'OFFLINE'}</span><strong>{room.name}</strong><span>{viewers === null ? '—' : viewers.toLocaleString('vi-VN')} người xem</span></div></div><div className="scene-footer"><span><i className="status-dot" />{status.message}</span><span>{viewers === null ? '—' : viewers.toLocaleString('vi-VN')} người xem TikTok · {guests.length} khách trong quán</span><button type="button" className="fullscreen-button" onClick={openFullscreen}>⛶ Toàn màn hình</button></div></div>
         <aside className="chat-panel"><div className="chat-head"><div><span className="eyebrow">CUỘC TRÒ CHUYỆN</span><h2>Bình luận LIVE</h2></div><span className="chat-count">{comments.length}</span></div><div className="chat-list">{comments.length ? comments.map((comment) => <div className="chat-line" key={comment.id}><Avatar avatar={comment.avatar} name={comment.nickname} /><div><div className="chat-meta"><strong>{comment.nickname}</strong><time>{new Date(comment.timestamp).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}</time></div><p>{comment.comment}</p></div></div>) : <div className="chat-empty"><span>💬</span><strong>Chưa có lời nhắn</strong><p>Khi có bình luận, bong bóng chat sẽ hiện trên nhân vật trong quán.</p></div>}</div><div className="chat-foot">Tin nhắn được lấy trực tiếp từ TikTok LIVE</div></aside>
       </div>
     </main>
@@ -233,20 +252,28 @@ const seatPositions = [
   [26, 43], [51, 43], [76, 43],
 ];
 
-function Scene({ theme, guests, comments }: { theme: Theme; guests: Guest[]; comments: Comment[] }) {
+const phoneSeatPositions = [
+  [18, 54], [50, 54], [82, 54],
+  [18, 65], [50, 65], [82, 65],
+  [18, 76], [50, 76], [82, 76],
+  [18, 87], [50, 87], [82, 87],
+];
+
+function Scene({ theme, guests, comments, viewMode }: { theme: Theme; guests: Guest[]; comments: Comment[]; viewMode: ViewMode }) {
   const [now, setNow] = useState(Date.now());
   useEffect(() => { const timer = window.setInterval(() => setNow(Date.now()), 500); return () => clearInterval(timer); }, []);
-  return <div className={`scene ${theme}`}>
+  return <div className={`scene ${theme} scene-${viewMode}`}>
     <div className="scene-sky"><span className="moon" /><span className="star star-one">✦</span><span className="star star-two">✧</span><span className="star star-three">✦</span></div>
     <div className="shop-front"><div className="shop-roof" /><div className="shop-sign">{theme === 'sidewalk-cafe' ? 'CÀ PHÊ · GÓC PHỐ' : 'PHÒNG TRÀ · ĐÊM NAY'}</div><div className="shop-awning" /><div className="shop-window"><span>☕</span></div><div className="shop-door"><div className="door-glow" /></div><div className="shop-window second"><span>{theme === 'sidewalk-cafe' ? '✳' : '♫'}</span></div></div>
     <div className="scene-lamps"><div className="lamp left" /><div className="lamp right" /></div>
     <div className="pavement" /><div className="street-line" />
     <div className="table table-one"><span>☕</span></div><div className="table table-two"><span>☕</span></div><div className="table table-three"><span>☕</span></div>
     {guests.map((guest) => {
-      const [left, top] = seatPositions[guest.seat] ?? seatPositions[0];
+      const positions = viewMode === 'phone' ? phoneSeatPositions : seatPositions;
+      const [left, top] = positions[guest.seat] ?? positions[0];
       const latest = comments.find((comment) => comment.guestId === guest.id);
       const showBubble = latest && now - latest.timestamp < 7000;
-      return <div className="scene-guest" key={guest.id} style={{ left: `${left}%`, top: `${top}%` }} title={`@${guest.username}`}>
+      return <div className={`scene-guest chair-${guest.seat % 2}`} key={guest.id} style={{ left: `${left}%`, top: `${top}%` }} title={`@${guest.username}`}>
         {showBubble && <div className="speech-bubble" key={latest.id}>{latest.comment}</div>}
         <div className="guest-name">{guest.nickname}</div>
         <div className="guest-chair" />
@@ -254,6 +281,6 @@ function Scene({ theme, guests, comments }: { theme: Theme; guests: Guest[]; com
       </div>;
     })}
     {guests.length === 0 && <div className="scene-placeholder"><span>☕</span><strong>Quán đang chờ khách</strong><small>Khách vào LIVE sẽ xuống quán và tìm ghế ngồi.</small></div>}
-    <div className="scene-caption">{theme === 'sidewalk-cafe' ? 'Một góc phố, một ly cà phê, nhiều câu chuyện.' : 'Ánh đèn dịu, âm nhạc và những cuộc trò chuyện.'}</div>
+    <div className="scene-caption">{theme === 'sidewalk-cafe' ? 'Xe cà phê góc phố · Ghế nhựa tự lấy · Đậm chất Việt.' : 'Ánh đèn dịu, âm nhạc và những cuộc trò chuyện.'}</div>
   </div>;
 }
