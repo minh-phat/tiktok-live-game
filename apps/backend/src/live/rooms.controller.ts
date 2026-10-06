@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Post, Req } from '@nestjs/common';
+import { Body, Controller, Get, Param, Patch, Post, Req } from '@nestjs/common';
 import type { Request } from 'express';
 import { AuthService } from '../auth/auth.service';
 import { sessionToken } from '../auth/session';
@@ -25,5 +25,11 @@ export class RoomsController {
   async create(@Req() request: Request, @Body() body: { name?: string; theme?: RoomTheme; tiktokUsername?: string }) {
     const user = await this.auth.requireUser(sessionToken(request.headers.cookie));
     return this.rooms.create(user.id, body);
+  }
+
+  @Patch(':id/audio')
+  async updateAudio(@Req() request: Request, @Param('id') id: string, @Body() body: { trackIds?: unknown; orderMode?: unknown }) {
+    const user = await this.auth.requireUser(sessionToken(request.headers.cookie));
+    return this.rooms.updateAudio(user.id, id, body);
   }
 }

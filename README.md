@@ -42,10 +42,16 @@ MONGODB_URI=mongodb://127.0.0.1:27017
 MONGODB_DB=live_quan
 PORT=3001
 FRONTEND_URL=http://localhost:3000
+R2_ACCOUNT_ID=your_cloudflare_account_id
+R2_ACCESS_KEY_ID=your_r2_access_key
+R2_SECRET_ACCESS_KEY=your_r2_secret_key
+R2_BUCKET_NAME=your_bucket
+R2_PUBLIC_URL=https://media.example.com
 ```
 
 - Backend: `PORT` (mặc định `3001`), `FRONTEND_URL` (mặc định `http://localhost:3000`)
 - Backend: `MONGODB_URI` (mặc định `mongodb://127.0.0.1:27017`), `MONGODB_DB` (mặc định `live_quan`)
+- Cloudflare R2: 5 biến `R2_*` ở trên. Bật public access/custom domain cho bucket và cấu hình CORS cho phép domain frontend đọc file âm thanh.
 - Chỉ cho lệnh chuyển dữ liệu: `DATA_FILE` (mặc định `./data/app.json` tính từ `apps/backend`)
 - Frontend: `NEXT_PUBLIC_BACKEND_URL` (mặc định `http://localhost:3001`)
 

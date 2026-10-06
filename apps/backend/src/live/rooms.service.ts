@@ -1,7 +1,7 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
 import { StoreService } from '../auth/store.service';
-import type { LiveRoom, RoomTheme } from './live.types';
+import type { AudioOrderMode, LiveRoom, RoomTheme } from './live.types';
 
 @Injectable()
 export class RoomsService {
@@ -25,9 +25,20 @@ export class RoomsService {
     if (theme !== 'sidewalk-cafe' && theme !== 'tea-room') throw new BadRequestException('Chủ đề phòng không hợp lệ.');
     if (!tiktokUsername) throw new BadRequestException('Username TikTok không hợp lệ.');
     if (await this.store.rooms.countDocuments({ ownerId }) >= 20) throw new BadRequestException('Mỗi tài khoản được tạo tối đa 20 phòng.');
-    const room: LiveRoom = { id: randomUUID(), ownerId, name, theme, tiktokUsername, createdAt: new Date().toISOString() };
+    const room: LiveRoom = { id: randomUUID(), ownerId, name, theme, tiktokUsername, createdAt: new Date().toISOString(), audio: { trackIds: [], orderMode: 'manual' } };
     await this.store.rooms.insertOne(room);
     return room;
+  }
+
+  async updateAudio(ownerId: string, id: string, input: { trackIds?: unknown; orderMode?: unknown }) {
+    await this.get(ownerId, id);
+    const trackIds = Array.isArray(input?.trackIds) ? [...new Set(input.trackIds.map(String))] : [];
+    const orderMode = input?.orderMode as AudioOrderMode;
+    if (!['manual', 'random', 'name', 'createdAt'].includes(orderMode)) throw new BadRequestException('Kiểu sắp xếp âm thanh không hợp lệ.');
+    const ownedCount = await this.store.audioTracks.countDocuments({ ownerId, id: { $in: trackIds } });
+    if (ownedCount !== trackIds.length) throw new BadRequestException('Danh sách có âm thanh không thuộc tài khoản này.');
+    await this.store.rooms.updateOne({ id, ownerId }, { $set: { audio: { trackIds, orderMode } } });
+    return this.get(ownerId, id);
   }
 
   cleanUsername(value?: string) {

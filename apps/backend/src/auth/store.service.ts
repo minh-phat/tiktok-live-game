@@ -1,6 +1,6 @@
 import { Injectable, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import { Collection, MongoClient } from 'mongodb';
-import type { LiveRoom } from '../live/live.types';
+import type { AudioTrack, LiveRoom } from '../live/live.types';
 
 export interface StoredUser {
   id: string;
@@ -25,6 +25,7 @@ export class StoreService implements OnModuleInit, OnModuleDestroy {
   readonly users: Collection<StoredUser> = this.client.db(mongodbDatabase()).collection('users');
   readonly sessions: Collection<StoredSession> = this.client.db(mongodbDatabase()).collection('sessions');
   readonly rooms: Collection<LiveRoom> = this.client.db(mongodbDatabase()).collection('rooms');
+  readonly audioTracks: Collection<AudioTrack> = this.client.db(mongodbDatabase()).collection('audio_tracks');
 
   async onModuleInit() {
     await this.client.connect();
@@ -35,6 +36,8 @@ export class StoreService implements OnModuleInit, OnModuleDestroy {
       this.sessions.createIndex({ expiresAt: 1 }, { expireAfterSeconds: 0 }),
       this.rooms.createIndex({ id: 1 }, { unique: true }),
       this.rooms.createIndex({ ownerId: 1, createdAt: -1 }),
+      this.audioTracks.createIndex({ id: 1 }, { unique: true }),
+      this.audioTracks.createIndex({ ownerId: 1, createdAt: -1 }),
     ]);
   }
 

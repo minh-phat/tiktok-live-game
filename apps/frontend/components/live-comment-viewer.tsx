@@ -1,13 +1,15 @@
 'use client';
 
-import { useEffect, useRef, useState, type FormEvent } from 'react';
+import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import { io, type Socket } from 'socket.io-client';
 
 type Theme = 'sidewalk-cafe' | 'tea-room';
 type ViewMode = 'desktop' | 'phone';
 type Status = { state: 'connected' | 'connecting' | 'disconnected'; message: string; username?: string };
 type User = { id: string; name: string; email: string };
-type Room = { id: string; name: string; theme: Theme; tiktokUsername: string; createdAt: string };
+type AudioOrderMode = 'manual' | 'random' | 'name' | 'createdAt';
+type AudioTrack = { id: string; name: string; url: string; mimeType: string; size: number; createdAt: string };
+type Room = { id: string; name: string; theme: Theme; tiktokUsername: string; createdAt: string; audio?: { trackIds: string[]; orderMode: AudioOrderMode } };
 type Guest = { id: string; username: string; nickname: string; avatar: string; seat: number; joinedAt: number };
 type Comment = { id: string; guestId: string; username: string; nickname: string; avatar: string; comment: string; timestamp: number };
 type Snapshot = { status: Status; guests: Guest[]; comments: Comment[]; viewers: number | null };
@@ -16,11 +18,12 @@ type Reply<T = undefined> = { ok: boolean; message?: string; data?: T };
 const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL ?? 'http://localhost:3001';
 const emptyStatus: Status = { state: 'disconnected', message: 'Chưa kết nối TikTok LIVE' };
 
-async function api<T>(path: string, method = 'GET', body?: object): Promise<T> {
+async function api<T>(path: string, method = 'GET', body?: object | FormData): Promise<T> {
+  const isForm = body instanceof FormData;
   const response = await fetch(`${backendUrl}${path}`, {
     method, credentials: 'include',
-    headers: body ? { 'Content-Type': 'application/json' } : undefined,
-    body: body ? JSON.stringify(body) : undefined,
+    headers: body && !isForm ? { 'Content-Type': 'application/json' } : undefined,
+    body: body ? (isForm ? body : JSON.stringify(body)) : undefined,
   });
   const data = await response.json().catch(() => ({}));
   if (!response.ok) {
@@ -233,12 +236,95 @@ function RoomScreen({ room, onBack }: { room: Room; onBack: () => void }) {
     <main className="room-page">
       <div className="room-titlebar"><div><button className="back-button" onClick={onBack}>← Tất cả phòng</button><span className="eyebrow">{room.theme === 'sidewalk-cafe' ? 'CÀ PHÊ VỈA HÈ' : 'PHÒNG TRÀ'} / @{room.tiktokUsername}</span><h1>{room.name}</h1></div><div className="room-actions"><div className="view-mode-switch" role="group" aria-label="Chế độ hiển thị"><button type="button" className={viewMode === 'phone' ? 'active' : ''} onClick={() => changeViewMode('phone')} aria-pressed={viewMode === 'phone'}>▯ Điện thoại</button><button type="button" className={viewMode === 'desktop' ? 'active' : ''} onClick={() => changeViewMode('desktop')} aria-pressed={viewMode === 'desktop'}>▭ Desktop</button></div><div className="room-controls"><span className={`live-pill ${status.state}`}><span />{status.state === 'connected' ? 'ĐANG LIVE' : status.state === 'connecting' ? 'ĐANG KẾT NỐI' : 'CHƯA LIVE'}</span>{status.state === 'connected' ? <button className="secondary-button" onClick={disconnect}>Ngắt kết nối</button> : <button className="primary-button" disabled={status.state === 'connecting'} onClick={reconnect}>Kết nối lại</button>}</div></div></div>
       {error && <p className="notice error" role="alert">{error}</p>}
+      <AudioManager room={room} onError={setError} />
       <div className={`room-layout ${viewMode}-view`}>
         <div className="scene-column"><div className="stream-stage" ref={stageRef}><Scene theme={room.theme} guests={guests} comments={comments} viewMode={viewMode} /><div className="stream-hud"><span className={`stream-live ${status.state}`}>● {status.state === 'connected' ? 'LIVE' : 'OFFLINE'}</span><strong>{room.name}</strong><span>{viewers === null ? '—' : viewers.toLocaleString('vi-VN')} người xem</span></div></div><div className="scene-footer"><span><i className="status-dot" />{status.message}</span><span>{viewers === null ? '—' : viewers.toLocaleString('vi-VN')} người xem TikTok · {guests.length} khách trong quán</span><button type="button" className="fullscreen-button" onClick={openFullscreen}>⛶ Toàn màn hình</button></div></div>
         <aside className="chat-panel"><div className="chat-head"><div><span className="eyebrow">CUỘC TRÒ CHUYỆN</span><h2>Bình luận LIVE</h2></div><span className="chat-count">{comments.length}</span></div><div className="chat-list">{comments.length ? comments.map((comment) => <div className="chat-line" key={comment.id}><Avatar avatar={comment.avatar} name={comment.nickname} /><div><div className="chat-meta"><strong>{comment.nickname}</strong><time>{new Date(comment.timestamp).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}</time></div><p>{comment.comment}</p></div></div>) : <div className="chat-empty"><span>💬</span><strong>Chưa có lời nhắn</strong><p>Khi có bình luận, bong bóng chat sẽ hiện trên nhân vật trong quán.</p></div>}</div><div className="chat-foot">Tin nhắn được lấy trực tiếp từ TikTok LIVE</div></aside>
       </div>
     </main>
   );
+}
+
+function AudioManager({ room, onError }: { room: Room; onError: (message: string) => void }) {
+  const [tracks, setTracks] = useState<AudioTrack[]>([]);
+  const [selectedIds, setSelectedIds] = useState(room.audio?.trackIds ?? []);
+  const [mode, setMode] = useState<AudioOrderMode>(room.audio?.orderMode ?? 'manual');
+  const [uploading, setUploading] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [currentId, setCurrentId] = useState<string | null>(null);
+  const [dragId, setDragId] = useState<string | null>(null);
+  const audioRef = useRef<HTMLAudioElement>(null);
+
+  useEffect(() => { api<AudioTrack[]>('/audio').then(setTracks).catch((cause) => onError((cause as Error).message)); }, [onError]);
+
+  const playlist = useMemo(() => {
+    const chosen = selectedIds.map((id) => tracks.find((track) => track.id === id)).filter((track): track is AudioTrack => Boolean(track));
+    if (mode === 'name') return [...chosen].sort((a, b) => a.name.localeCompare(b.name, 'vi'));
+    if (mode === 'createdAt') return [...chosen].sort((a, b) => Date.parse(a.createdAt) - Date.parse(b.createdAt));
+    if (mode === 'random') return [...chosen].sort(() => Math.random() - 0.5);
+    return chosen;
+  }, [tracks, selectedIds, mode]);
+
+  async function upload(files: FileList | null) {
+    if (!files?.length) return;
+    setUploading(true); onError('');
+    const form = new FormData();
+    Array.from(files).forEach((file) => form.append('files', file));
+    try {
+      const added = await api<AudioTrack[]>('/audio/upload', 'POST', form);
+      setTracks((current) => [...added, ...current]);
+    } catch (cause) { onError((cause as Error).message); }
+    finally { setUploading(false); }
+  }
+
+  function toggle(id: string) {
+    setSelectedIds((current) => current.includes(id) ? current.filter((item) => item !== id) : [...current, id]);
+  }
+
+  function drop(beforeId: string) {
+    if (!dragId || dragId === beforeId || mode !== 'manual') return;
+    setSelectedIds((current) => {
+      const next = current.filter((id) => id !== dragId);
+      next.splice(next.indexOf(beforeId), 0, dragId);
+      return next;
+    });
+    setDragId(null);
+  }
+
+  async function save() {
+    setSaving(true); onError('');
+    try { await api(`/rooms/${room.id}/audio`, 'PATCH', { trackIds: selectedIds, orderMode: mode }); }
+    catch (cause) { onError((cause as Error).message); }
+    finally { setSaving(false); }
+  }
+
+  function play(id: string) {
+    setCurrentId(id);
+    window.setTimeout(() => audioRef.current?.play().catch(() => undefined), 0);
+  }
+
+  function playNext() {
+    if (!playlist.length) return;
+    const index = playlist.findIndex((track) => track.id === currentId);
+    play(playlist[(index + 1) % playlist.length].id);
+  }
+
+  const current = tracks.find((track) => track.id === currentId);
+  return <section className="audio-manager">
+    <div className="audio-toolbar">
+      <div><span className="eyebrow">ÂM THANH PHÒNG LIVE</span><h2>Playlist phát trong phòng</h2></div>
+      <div className="audio-actions">
+        <label className={`secondary-button upload-button ${uploading ? 'disabled' : ''}`}>{uploading ? 'Đang tải…' : '＋ Tải nhiều file'}<input type="file" accept="audio/*" multiple disabled={uploading} onChange={(event) => { void upload(event.target.files); event.target.value = ''; }} /></label>
+        <select value={mode} onChange={(event) => setMode(event.target.value as AudioOrderMode)} aria-label="Sắp xếp playlist"><option value="manual">Kéo thả thủ công</option><option value="random">Ngẫu nhiên</option><option value="name">Theo tên</option><option value="createdAt">Theo thời gian đăng</option></select>
+        <button className="primary-button" type="button" disabled={saving} onClick={save}>{saving ? 'Đang lưu…' : 'Lưu playlist'}</button>
+      </div>
+    </div>
+    {tracks.length === 0 ? <p className="audio-empty">Chưa có âm thanh. Bạn có thể chọn và tải nhiều file cùng lúc (tối đa 25 MB/file).</p> : <div className="audio-content">
+      <div className="audio-library"><strong>Thư viện của bạn</strong>{tracks.map((track) => <label key={track.id} className="audio-library-item"><input type="checkbox" checked={selectedIds.includes(track.id)} onChange={() => toggle(track.id)} /><span><b>{track.name}</b><small>{(track.size / 1024 / 1024).toFixed(1)} MB · {new Date(track.createdAt).toLocaleDateString('vi-VN')}</small></span></label>)}</div>
+      <div className="playlist"><div className="playlist-title"><strong>Thứ tự phát ({playlist.length})</strong>{playlist.length > 0 && <button type="button" onClick={() => play(playlist[0].id)}>▶ Phát playlist</button>}</div>{playlist.length === 0 ? <span className="muted">Chọn âm thanh từ thư viện.</span> : playlist.map((track, index) => <div key={track.id} className={`playlist-item ${currentId === track.id ? 'playing' : ''}`} draggable={mode === 'manual'} onDragStart={() => setDragId(track.id)} onDragOver={(event) => event.preventDefault()} onDrop={() => drop(track.id)}><span className="drag-handle">{mode === 'manual' ? '⠿' : index + 1}</span><button type="button" onClick={() => play(track.id)}>▶</button><span title={track.name}>{track.name}</span></div>)}</div>
+    </div>}
+    {current && <div className="audio-player"><span>Đang phát: <strong>{current.name}</strong></span><audio ref={audioRef} src={current.url} controls autoPlay onEnded={playNext} /></div>}
+  </section>;
 }
 
 function Avatar({ avatar, name }: { avatar: string; name: string }) {

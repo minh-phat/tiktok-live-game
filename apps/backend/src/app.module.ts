@@ -7,6 +7,9 @@ import { AuthController } from './auth/auth.controller';
 import { RoomsService } from './live/rooms.service';
 import { RoomsController } from './live/rooms.controller';
 import { ConfigModule } from '@nestjs/config';
+import { AudioController } from './audio/audio.controller';
+import { AudioService } from './audio/audio.service';
+import { R2Service } from './audio/r2.service';
 
 @Module({
   imports: [
@@ -15,7 +18,7 @@ import { ConfigModule } from '@nestjs/config';
       envFilePath: ['apps/backend/.env', '.env'],
     }),
   ],
-  controllers: [AuthController, RoomsController],
-  providers: [StoreService, AuthService, RoomsService, LiveGateway, TikTokLiveService],
+  controllers: [AuthController, RoomsController, AudioController],
+  providers: [StoreService, AuthService, RoomsService, AudioService, R2Service, LiveGateway, TikTokLiveService],
 })
 export class AppModule {}

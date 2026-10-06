@@ -1,4 +1,21 @@
 export type RoomTheme = 'sidewalk-cafe' | 'tea-room';
+export type AudioOrderMode = 'manual' | 'random' | 'name' | 'createdAt';
+
+export interface AudioTrack {
+  id: string;
+  ownerId: string;
+  name: string;
+  objectKey: string;
+  url: string;
+  mimeType: string;
+  size: number;
+  createdAt: string;
+}
+
+export interface RoomAudioSettings {
+  trackIds: string[];
+  orderMode: AudioOrderMode;
+}
 
 export interface LiveRoom {
   id: string;
@@ -7,6 +24,7 @@ export interface LiveRoom {
   theme: RoomTheme;
   tiktokUsername: string;
   createdAt: string;
+  audio?: RoomAudioSettings;
 }
 
 export interface LiveStatus {
