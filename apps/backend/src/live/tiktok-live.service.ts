@@ -1,5 +1,5 @@
 import { Injectable, Logger, OnModuleDestroy } from '@nestjs/common';
-import { ControlEvent, TikTokLiveConnection, WebcastEvent } from 'tiktok-live-connector';
+import type { TikTokLiveConnection, ClientEventMap } from 'tiktok-live-connector' with { "resolution-mode": "import" };
 import type { Server } from 'socket.io';
 import type { LiveComment, LiveGuest, LiveRoom, LiveStatus, RoomSnapshot } from './live.types';
 
@@ -11,6 +11,12 @@ interface LiveSession {
   comments: LiveComment[];
   viewers: number | null;
 }
+
+// Connector 2.5's typed-emitter default import loses its inherited methods under
+// Node16 resolution. Retain the library's event map for the runtime on() method.
+type LiveConnection = TikTokLiveConnection & {
+  on<E extends keyof ClientEventMap>(event: E, listener: ClientEventMap[E]): unknown;
+};
 
 const MAX_GUESTS = 200;
 const MAX_COMMENTS = 100;
@@ -104,10 +110,17 @@ export class TikTokLiveService implements OnModuleDestroy {
     const session = this.session(room.id);
     const attempt = session.attempt;
     this.setStatus(room.id, { state: 'connecting', username: room.tiktokUsername, message: `Đang kết nối @${room.tiktokUsername}...` });
+    // Keep this as a native import(): the connector is ESM, while NestJS runs as CommonJS.
+    const { TikTokLiveConnection, WebcastEvent, ControlEvent } = await import('tiktok-live-connector').catch((error) => {
+      if (session.attempt === attempt) this.disconnect(room.id, this.publicError(error));
+      throw error;
+    });
+    // A disconnect or newer connect may have happened while loading the module.
+    if (session.attempt !== attempt) return;
     const connection = new TikTokLiveConnection(room.tiktokUsername, {
       processInitialData: false,
       fetchRoomInfoOnConnect: true,
-    });
+    }) as LiveConnection;
     session.connection = connection;
     const isCurrent = () => session.attempt === attempt && session.connection === connection;
 
@@ -116,13 +129,13 @@ export class TikTokLiveService implements OnModuleDestroy {
     });
     connection.on(WebcastEvent.CHAT, (data) => {
       if (!isCurrent()) return;
-      const comment = String(data.content ?? data.comment ?? data.text ?? '').trim();
+      const comment = String(data.content ?? ('comment' in data ? data.comment : undefined) ?? ('text' in data ? data.text : '')).trim();
       if (!comment) return;
-      const user = data.user ?? data;
+      const user = data.user ?? {};
       const guest = this.upsertGuest(room.id, user);
       if (!guest) return;
       const item: LiveComment = {
-        id: String(data.common?.msgId ?? data.msgId ?? `${Date.now()}-${Math.random()}`),
+        id: String(data.common?.msgId ?? ('msgId' in data ? data.msgId : undefined) ?? `${Date.now()}-${Math.random()}`),
         guestId: guest.id,
         username: guest.username,
         nickname: guest.nickname,
@@ -136,7 +149,9 @@ export class TikTokLiveService implements OnModuleDestroy {
     });
     connection.on(WebcastEvent.ROOM_USER, (data) => {
       if (!isCurrent()) return;
-      session.viewers = Number(data.viewerCount ?? data.topViewers?.length ?? 0);
+      const viewerCount = 'viewerCount' in data ? data.viewerCount : undefined;
+      const topViewers = 'topViewers' in data && Array.isArray(data.topViewers) ? data.topViewers : [];
+      session.viewers = Number(viewerCount ?? topViewers.length);
       this.emit(room.id, 'live:stats', { viewers: session.viewers });
     });
     connection.on(WebcastEvent.STREAM_END, () => {
