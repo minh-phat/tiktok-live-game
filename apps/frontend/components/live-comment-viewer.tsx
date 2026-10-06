@@ -238,7 +238,7 @@ function RoomScreen({ room, onBack }: { room: Room; onBack: () => void }) {
       {error && <p className="notice error" role="alert">{error}</p>}
       <AudioManager room={room} onError={setError} />
       <div className={`room-layout ${viewMode}-view`}>
-        <div className="scene-column"><div className="stream-stage" ref={stageRef}><Scene theme={room.theme} guests={guests} comments={comments} viewMode={viewMode} /><div className="stream-hud"><span className={`stream-live ${status.state}`}>● {status.state === 'connected' ? 'LIVE' : 'OFFLINE'}</span><strong>{room.name}</strong><span>{viewers === null ? '—' : viewers.toLocaleString('vi-VN')} người xem</span></div></div><div className="scene-footer"><span><i className="status-dot" />{status.message}</span><span>{viewers === null ? '—' : viewers.toLocaleString('vi-VN')} người xem TikTok · {guests.length} khách trong quán</span><button type="button" className="fullscreen-button" onClick={openFullscreen}>⛶ Toàn màn hình</button></div></div>
+        <div className="scene-column"><div className="stream-stage" ref={stageRef}><Scene theme={room.theme} guests={guests} comments={comments} viewMode={viewMode} /></div><div className="scene-footer"><span><i className="status-dot" />{status.message}</span><span>{viewers === null ? '—' : viewers.toLocaleString('vi-VN')} người xem TikTok · {guests.length} khách trong quán</span><button type="button" className="fullscreen-button" onClick={openFullscreen}>⛶ Toàn màn hình</button></div></div>
         <aside className="chat-panel"><div className="chat-head"><div><span className="eyebrow">CUỘC TRÒ CHUYỆN</span><h2>Bình luận LIVE</h2></div><span className="chat-count">{comments.length}</span></div><div className="chat-list">{comments.length ? comments.map((comment) => <div className="chat-line" key={comment.id}><Avatar avatar={comment.avatar} name={comment.nickname} /><div><div className="chat-meta"><strong>{comment.nickname}</strong><time>{new Date(comment.timestamp).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}</time></div><p>{comment.comment}</p></div></div>) : <div className="chat-empty"><span>💬</span><strong>Chưa có lời nhắn</strong><p>Khi có bình luận, bong bóng chat sẽ hiện trên nhân vật trong quán.</p></div>}</div><div className="chat-foot">Tin nhắn được lấy trực tiếp từ TikTok LIVE</div></aside>
       </div>
     </main>
@@ -426,6 +426,5 @@ function Scene({ theme, guests, comments, viewMode }: { theme: Theme; guests: Gu
       </div>;
     })}
     {guests.length === 0 && <div className="scene-placeholder"><span>☕</span><strong>Quán đang chờ khách</strong><small>Khách vào LIVE sẽ xuống quán và tìm ghế ngồi.</small></div>}
-    <div className="scene-caption">{theme === 'sidewalk-cafe' ? 'Xe cà phê góc phố · Ghế nhựa tự lấy · Đậm chất Việt.' : 'Ánh đèn dịu, âm nhạc và những cuộc trò chuyện.'}</div>
   </div>;
 }
