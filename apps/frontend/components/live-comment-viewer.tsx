@@ -12,7 +12,8 @@ type AudioTrack = { id: string; name: string; url: string; mimeType: string; siz
 type Room = { id: string; name: string; theme: Theme; tiktokUsername: string; createdAt: string; audio?: { trackIds: string[]; orderMode: AudioOrderMode } };
 type Guest = { id: string; username: string; nickname: string; avatar: string; seat: number; joinedAt: number };
 type Comment = { id: string; guestId: string; username: string; nickname: string; avatar: string; comment: string; timestamp: number };
-type Snapshot = { status: Status; guests: Guest[]; comments: Comment[]; viewers: number | null };
+type Gift = { id: string; guestId: string; username: string; nickname: string; avatar: string; giftId: string; giftName: string; giftImage: string; count: number; diamonds: number; timestamp: number };
+type Snapshot = { status: Status; guests: Guest[]; comments: Comment[]; gifts: Gift[]; viewers: number | null };
 type Reply<T = undefined> = { ok: boolean; message?: string; data?: T };
 
 const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL ?? 'http://localhost:3001';
@@ -175,6 +176,7 @@ function RoomScreen({ room, onBack }: { room: Room; onBack: () => void }) {
   const [status, setStatus] = useState<Status>(emptyStatus);
   const [guests, setGuests] = useState<Guest[]>([]);
   const [comments, setComments] = useState<Comment[]>([]);
+  const [gifts, setGifts] = useState<Gift[]>([]);
   const [viewers, setViewers] = useState<number | null>(null);
   const [error, setError] = useState('');
   const [viewMode, setViewMode] = useState<ViewMode>('desktop');
@@ -193,6 +195,7 @@ function RoomScreen({ room, onBack }: { room: Room; onBack: () => void }) {
         setStatus(reply.data.status);
         setGuests(reply.data.guests);
         setComments(reply.data.comments);
+        setGifts(reply.data.gifts ?? []);
         setViewers(reply.data.viewers);
         if (reply.data.status.state === 'disconnected') {
           connection.emit('live:connect', { roomId: room.id }, (result: Reply) => {
@@ -205,8 +208,9 @@ function RoomScreen({ room, onBack }: { room: Room; onBack: () => void }) {
     connection.on('live:guest-joined', (guest: Guest) => setGuests((current) => [...current.filter((item) => item.id !== guest.id), guest]));
     connection.on('live:guest-left', ({ id }: { id: string }) => setGuests((current) => current.filter((guest) => guest.id !== id)));
     connection.on('live:comment', (comment: Comment) => setComments((current) => [comment, ...current].slice(0, 100)));
+    connection.on('live:gift', (gift: Gift) => setGifts((current) => [gift, ...current].slice(0, 20)));
     connection.on('live:stats', ({ viewers: count }: { viewers: number | null }) => setViewers(count));
-    connection.on('live:reset', () => { setGuests([]); setComments([]); setViewers(null); });
+    connection.on('live:reset', () => { setGuests([]); setComments([]); setGifts([]); setViewers(null); });
     connection.on('connect_error', () => setError('Không thể kết nối backend.'));
     setSocket(connection);
     return () => { connection.emit('room:leave', { roomId: room.id }); connection.disconnect(); };
@@ -238,7 +242,7 @@ function RoomScreen({ room, onBack }: { room: Room; onBack: () => void }) {
       {error && <p className="notice error" role="alert">{error}</p>}
       <AudioManager room={room} onError={setError} />
       <div className={`room-layout ${viewMode}-view`}>
-        <div className="scene-column"><div className="stream-stage" ref={stageRef}><Scene theme={room.theme} guests={guests} comments={comments} viewMode={viewMode} /></div><div className="scene-footer"><span><i className="status-dot" />{status.message}</span><span>{viewers === null ? '—' : viewers.toLocaleString('vi-VN')} người xem TikTok · {guests.length} khách trong quán</span><button type="button" className="fullscreen-button" onClick={openFullscreen}>⛶ Toàn màn hình</button></div></div>
+        <div className="scene-column"><div className="stream-stage" ref={stageRef}><Scene theme={room.theme} guests={guests} comments={comments} gifts={gifts} viewMode={viewMode} /></div><div className="scene-footer"><span><i className="status-dot" />{status.message}</span><span>{viewers === null ? '—' : viewers.toLocaleString('vi-VN')} người xem TikTok · {guests.length} khách trong quán</span><button type="button" className="fullscreen-button" onClick={openFullscreen}>⛶ Toàn màn hình</button></div></div>
         <aside className="chat-panel"><div className="chat-head"><div><span className="eyebrow">CUỘC TRÒ CHUYỆN</span><h2>Bình luận LIVE</h2></div><span className="chat-count">{comments.length}</span></div><div className="chat-list">{comments.length ? comments.map((comment) => <div className="chat-line" key={comment.id}><Avatar avatar={comment.avatar} name={comment.nickname} /><div><div className="chat-meta"><strong>{comment.nickname}</strong><time>{new Date(comment.timestamp).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}</time></div><p>{comment.comment}</p></div></div>) : <div className="chat-empty"><span>💬</span><strong>Chưa có lời nhắn</strong><p>Khi có bình luận, bong bóng chat sẽ hiện trên nhân vật trong quán.</p></div>}</div><div className="chat-foot">Tin nhắn được lấy trực tiếp từ TikTok LIVE</div></aside>
       </div>
     </main>
@@ -395,19 +399,26 @@ const staffDialogues = [
   { speaker: 'executive', name: 'Minh', message: 'Cà phê đen ít đường của anh đây. Chúc anh ngon miệng.' },
 ] as const;
 
-function Scene({ theme, guests, comments, viewMode }: { theme: Theme; guests: Guest[]; comments: Comment[]; viewMode: ViewMode }) {
+function Scene({ theme, guests, comments, gifts, viewMode }: { theme: Theme; guests: Guest[]; comments: Comment[]; gifts: Gift[]; viewMode: ViewMode }) {
   const [now, setNow] = useState(Date.now());
   useEffect(() => { const timer = window.setInterval(() => setNow(Date.now()), 500); return () => clearInterval(timer); }, []);
   const dialogue = staffDialogues[Math.floor(now / 6000) % staffDialogues.length];
   const showStaffBubble = now % 6000 < 5000;
   const crowdDensity = getCrowdDensity(guests.length);
   const guestSize = getGuestSize(viewMode);
+  const latestGift = gifts.find((gift) => now - gift.timestamp < 12000);
   return <div className={`scene ${theme} scene-${viewMode} crowd-${crowdDensity}`}>
     <div className="scene-sky"><span className="moon" /><span className="star star-one">✦</span><span className="star star-two">✧</span><span className="star star-three">✦</span></div>
     <div className="shop-front"><div className="shop-roof" /><div className="shop-sign">{theme === 'sidewalk-cafe' ? 'CÀ PHÊ · GÓC PHỐ' : 'PHÒNG TRÀ · ĐÊM NAY'}</div><div className="shop-awning" /><div className="shop-window"><span>☕</span></div><div className="shop-door"><div className="door-glow" /></div><div className="shop-window second"><span>{theme === 'sidewalk-cafe' ? '✳' : '♫'}</span></div></div>
     <div className="scene-lamps"><div className="lamp left" /><div className="lamp right" /></div>
     <div className="pavement" /><div className="street-line" />
     <div className="table table-one"><span>☕</span></div><div className="table table-two"><span>☕</span></div><div className="table table-three"><span>☕</span></div>
+    {theme === 'sidewalk-cafe' && latestGift && <div className="gift-thank-board" key={latestGift.id} role="status">
+      <span className="gift-sparkle">✦</span>
+      <Avatar avatar={latestGift.avatar} name={latestGift.nickname} />
+      <span className="gift-thank-copy"><small>QUÁN CẢM ƠN</small><strong>{latestGift.nickname}</strong><em>đã tặng {latestGift.giftName}{latestGift.count > 1 ? ` ×${latestGift.count}` : ''}</em></span>
+      {latestGift.giftImage ? <img className="gift-image" src={latestGift.giftImage} alt={latestGift.giftName} /> : <span className="gift-fallback">🎁</span>}
+    </div>}
     {theme === 'sidewalk-cafe' && <div className="cafe-staff" aria-label="Nhân viên quán cà phê">
       <div className="staff-member staff-owner"><img src="/characters/cafe-owner.png" alt="Cô chủ Hương đang pha cà phê" />{showStaffBubble && dialogue.speaker === 'owner' && <div className="staff-bubble"><strong>{dialogue.name}</strong>{dialogue.message}</div>}</div>
       <div className="staff-member staff-maid"><img src="/characters/maid-server-v2.png" alt="Lan đang phục vụ cà phê" />{showStaffBubble && dialogue.speaker === 'maid' && <div className="staff-bubble"><strong>{dialogue.name}</strong>{dialogue.message}</div>}</div>

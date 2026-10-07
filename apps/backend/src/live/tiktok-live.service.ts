@@ -1,7 +1,7 @@
 import { Injectable, Logger, OnModuleDestroy } from '@nestjs/common';
 import type { TikTokLiveConnection, ClientEventMap } from 'tiktok-live-connector' with { "resolution-mode": "import" };
 import type { Server } from 'socket.io';
-import type { LiveComment, LiveGuest, LiveRoom, LiveStatus, RoomSnapshot } from './live.types';
+import type { LiveComment, LiveGift, LiveGuest, LiveRoom, LiveStatus, RoomSnapshot } from './live.types';
 
 interface LiveSession {
   connection: TikTokLiveConnection | null;
@@ -9,6 +9,7 @@ interface LiveSession {
   status: LiveStatus;
   guests: LiveGuest[];
   comments: LiveComment[];
+  gifts: LiveGift[];
   viewers: number | null;
 }
 
@@ -20,6 +21,7 @@ type LiveConnection = TikTokLiveConnection & {
 
 const MAX_GUESTS = 200;
 const MAX_COMMENTS = 100;
+const MAX_GIFTS = 20;
 
 @Injectable()
 export class TikTokLiveService implements OnModuleDestroy {
@@ -35,7 +37,7 @@ export class TikTokLiveService implements OnModuleDestroy {
       session = {
         connection: null, attempt: 0,
         status: { state: 'disconnected', message: 'Chưa kết nối TikTok LIVE' },
-        guests: [], comments: [], viewers: null,
+        guests: [], comments: [], gifts: [], viewers: null,
       };
       this.sessions.set(roomId, session);
     }
@@ -48,6 +50,7 @@ export class TikTokLiveService implements OnModuleDestroy {
       status: session.status,
       guests: [...session.guests],
       comments: [...session.comments],
+      gifts: [...session.gifts],
       viewers: session.viewers,
     };
   }
@@ -100,9 +103,10 @@ export class TikTokLiveService implements OnModuleDestroy {
     }
     session.guests = [];
     session.comments = [];
+    session.gifts = [];
     session.viewers = null;
     this.setStatus(roomId, { state: 'disconnected', message: reason });
-    this.emit(roomId, 'live:reset', { guests: [], comments: [], viewers: null });
+    this.emit(roomId, 'live:reset', { guests: [], comments: [], gifts: [], viewers: null });
   }
 
   async connect(room: LiveRoom) {
@@ -146,6 +150,30 @@ export class TikTokLiveService implements OnModuleDestroy {
       session.comments.unshift(item);
       session.comments = session.comments.slice(0, MAX_COMMENTS);
       this.emit(room.id, 'live:comment', item);
+    });
+    connection.on(WebcastEvent.GIFT, (data) => {
+      if (!isCurrent()) return;
+      // Combo gifts send an event for every increment; thank once when the streak ends.
+      if (data.gift?.combo && data.repeatEnd !== 1) return;
+      const guest = this.upsertGuest(room.id, data.user ?? {});
+      if (!guest) return;
+      const count = Math.max(1, Number(data.repeatCount || data.comboCount || 1));
+      const gift: LiveGift = {
+        id: String(data.common?.msgId ?? data.logId ?? `${Date.now()}-${Math.random()}`),
+        guestId: guest.id,
+        username: guest.username,
+        nickname: guest.nickname,
+        avatar: guest.avatar,
+        giftId: String(data.giftId || data.gift?.id || ''),
+        giftName: String(data.gift?.name || data.gift?.describe || 'một món quà'),
+        giftImage: String(data.gift?.image?.urlList?.[0] ?? data.gift?.icon?.urlList?.[0] ?? ''),
+        count,
+        diamonds: Math.max(0, Number(data.gift?.diamondCount ?? 0)) * count,
+        timestamp: Date.now(),
+      };
+      session.gifts.unshift(gift);
+      session.gifts = session.gifts.slice(0, MAX_GIFTS);
+      this.emit(room.id, 'live:gift', gift);
     });
     connection.on(WebcastEvent.ROOM_USER, (data) => {
       if (!isCurrent()) return;

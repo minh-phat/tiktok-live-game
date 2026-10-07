@@ -53,10 +53,25 @@ export interface LiveComment {
   timestamp: number;
 }
 
+export interface LiveGift {
+  id: string;
+  guestId: string;
+  username: string;
+  nickname: string;
+  avatar: string;
+  giftId: string;
+  giftName: string;
+  giftImage: string;
+  count: number;
+  diamonds: number;
+  timestamp: number;
+}
+
 export interface RoomSnapshot {
   status: LiveStatus;
   guests: LiveGuest[];
   comments: LiveComment[];
+  gifts: LiveGift[];
   viewers: number | null;
 }
 
