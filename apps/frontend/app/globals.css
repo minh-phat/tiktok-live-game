@@ -584,6 +584,11 @@ input::placeholder {
   border: 0;
   border-radius: 0;
 }
+.stream-stage:fullscreen .scene.scene-desktop {
+  width: min(100vw, calc(100vh * 1672 / 941));
+  height: auto;
+  aspect-ratio: 1672 / 941;
+}
 .stream-stage:fullscreen .stream-hud {
   top: 20px;
   left: 20px;
@@ -794,7 +799,12 @@ input::placeholder {
 }
 .sidewalk-cafe {
   background: #171f25 url("/scenes/vietnamese-sidewalk-cafe-v2.png")
-    center/cover no-repeat;
+    center/100% 100% no-repeat;
+}
+.sidewalk-cafe.scene-desktop {
+  height: auto;
+  min-height: 0;
+  aspect-ratio: 1672 / 941;
 }
 .sidewalk-cafe:after {
   content: "";
@@ -1269,9 +1279,13 @@ input::placeholder {
 }
 .staff-owner {
   z-index: 1;
-  left: 47%;
-  top: 4%;
+  left: 50%;
+  top: 64%;
   width: 12%;
+  transform: translate(-50%, -100%);
+}
+.staff-owner img {
+  transform-origin: center bottom;
   animation: owner-working 3.2s ease-in-out infinite;
 }
 .staff-maid {
@@ -1316,8 +1330,8 @@ input::placeholder {
   letter-spacing: 0.04em;
 }
 .scene-phone .staff-owner {
-  left: 40%;
-  top: 10%;
+  left: 50%;
+  top: 44%;
   width: 21%;
 }
 .scene-phone .staff-maid {
@@ -1521,7 +1535,7 @@ input::placeholder {
     min-height: 350px;
     max-height: 450px;
   }
-  .scene:not(.scene-phone) {
+  .scene:not(.scene-phone):not(.sidewalk-cafe) {
     height: 600px;
   }
 }
@@ -1585,7 +1599,7 @@ input::placeholder {
   .room-controls {
     justify-content: space-between;
   }
-  .scene:not(.scene-phone) {
+  .scene:not(.scene-phone):not(.sidewalk-cafe) {
     height: 490px;
     min-height: 490px;
   }

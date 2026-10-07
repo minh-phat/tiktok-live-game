@@ -356,9 +356,16 @@ function getSeatPosition(seat: number, viewMode: ViewMode) {
 }
 
 function getGuestSize(viewMode: ViewMode) {
-  const [width, height] = [76, 104];
-  const phoneScale = viewMode === 'phone' ? 0.8 : 1;
-  return { width: Math.round(width * phoneScale), height: Math.round(height * phoneScale) };
+  // Keep guests in the same coordinate system as the scene instead of using
+  // viewport-independent pixels. Both dimensions must be explicit because
+  // every child inside this absolutely positioned box is also absolute;
+  // `height: auto` would therefore collapse the character box to zero. These
+  // sizes stay constant regardless of crowd density, so a busy room overlaps
+  // characters instead of shrinking them.
+  return {
+    width: viewMode === 'phone' ? '14%' : '10%',
+    height: viewMode === 'phone' ? '10.75%' : '24.35%',
+  };
 }
 
 function getCrowdDensity(guestCount: number) {
