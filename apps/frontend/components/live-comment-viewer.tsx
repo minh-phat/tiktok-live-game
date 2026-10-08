@@ -17,6 +17,7 @@ type Snapshot = { status: Status; guests: Guest[]; comments: Comment[]; gifts: G
 type Reply<T = undefined> = { ok: boolean; message?: string; data?: T };
 
 const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL ?? 'http://localhost:3001';
+const MAX_AUDIO_FILE_SIZE = 100 * 1024 * 1024;
 const emptyStatus: Status = { state: 'disconnected', message: 'Chưa kết nối TikTok LIVE' };
 
 async function api<T>(path: string, method = 'GET', body?: object | FormData): Promise<T> {
@@ -271,6 +272,11 @@ function AudioManager({ room, onError }: { room: Room; onError: (message: string
 
   async function upload(files: FileList | null) {
     if (!files?.length) return;
+    const oversizedFile = Array.from(files).find((file) => file.size > MAX_AUDIO_FILE_SIZE);
+    if (oversizedFile) {
+      onError(`${oversizedFile.name} vượt quá 100 MB.`);
+      return;
+    }
     setUploading(true); onError('');
     const form = new FormData();
     Array.from(files).forEach((file) => form.append('files', file));
@@ -323,7 +329,7 @@ function AudioManager({ room, onError }: { room: Room; onError: (message: string
         <button className="primary-button" type="button" disabled={saving} onClick={save}>{saving ? 'Đang lưu…' : 'Lưu playlist'}</button>
       </div>
     </div>
-    {tracks.length === 0 ? <p className="audio-empty">Chưa có âm thanh. Bạn có thể chọn và tải nhiều file cùng lúc (tối đa 25 MB/file).</p> : <div className="audio-content">
+    {tracks.length === 0 ? <p className="audio-empty">Chưa có âm thanh. Bạn có thể chọn và tải nhiều file cùng lúc (tối đa 100 MB/file).</p> : <div className="audio-content">
       <div className="audio-library"><strong>Thư viện của bạn</strong>{tracks.map((track) => <label key={track.id} className="audio-library-item"><input type="checkbox" checked={selectedIds.includes(track.id)} onChange={() => toggle(track.id)} /><span><b>{track.name}</b><small>{(track.size / 1024 / 1024).toFixed(1)} MB · {new Date(track.createdAt).toLocaleDateString('vi-VN')}</small></span></label>)}</div>
       <div className="playlist"><div className="playlist-title"><strong>Thứ tự phát ({playlist.length})</strong>{playlist.length > 0 && <button type="button" onClick={() => play(playlist[0].id)}>▶ Phát playlist</button>}</div>{playlist.length === 0 ? <span className="muted">Chọn âm thanh từ thư viện.</span> : playlist.map((track, index) => <div key={track.id} className={`playlist-item ${currentId === track.id ? 'playing' : ''}`} draggable={mode === 'manual'} onDragStart={() => setDragId(track.id)} onDragOver={(event) => event.preventDefault()} onDrop={() => drop(track.id)}><span className="drag-handle">{mode === 'manual' ? '⠿' : index + 1}</span><button type="button" onClick={() => play(track.id)}>▶</button><span title={track.name}>{track.name}</span></div>)}</div>
     </div>}

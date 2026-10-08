@@ -7,6 +7,8 @@ import { R2Service } from './r2.service';
 
 type Upload = { originalname: string; mimetype: string; size: number; buffer: Buffer };
 
+const MAX_AUDIO_FILE_SIZE = 100 * 1024 * 1024;
+
 @Injectable()
 export class AudioService {
   constructor(private readonly store: StoreService, private readonly r2: R2Service) {}
@@ -21,7 +23,7 @@ export class AudioService {
     const results: AudioTrack[] = [];
     for (const file of files) {
       if (!file.mimetype.startsWith('audio/')) throw new BadRequestException(`${file.originalname} không phải file âm thanh.`);
-      if (file.size > 25 * 1024 * 1024) throw new BadRequestException(`${file.originalname} vượt quá 25 MB.`);
+      if (file.size > MAX_AUDIO_FILE_SIZE) throw new BadRequestException(`${file.originalname} vượt quá 100 MB.`);
       const id = randomUUID();
       const extension = extname(file.originalname).toLowerCase().replace(/[^.a-z0-9]/g, '').slice(0, 8);
       const objectKey = `audio/${ownerId}/${id}${extension}`;
