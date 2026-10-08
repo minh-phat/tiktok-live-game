@@ -11,7 +11,7 @@ type User = { id: string; name: string; email: string };
 type AudioOrderMode = 'manual' | 'random' | 'name' | 'createdAt';
 type AudioTrack = { id: string; name: string; url: string; mimeType: string; size: number; createdAt: string };
 type Room = { id: string; name: string; theme: Theme; platform?: LivePlatform; tiktokUsername: string; youtubeLiveId?: string; createdAt: string; audio?: { trackIds: string[]; orderMode: AudioOrderMode } };
-type Guest = { id: string; username: string; nickname: string; avatar: string; seat: number; joinedAt: number };
+type Guest = { id: string; username: string; nickname: string; avatar: string; seat: number; joinedAt: number; isVirtual?: boolean };
 type Comment = { id: string; guestId: string; username: string; nickname: string; avatar: string; comment: string; timestamp: number };
 type Gift = { id: string; guestId: string; username: string; nickname: string; avatar: string; giftId: string; giftName: string; giftImage: string; count: number; diamonds: number; timestamp: number };
 type Snapshot = { status: Status; guests: Guest[]; comments: Comment[]; gifts: Gift[]; viewers: number | null };
@@ -191,6 +191,7 @@ function RoomScreen({ room, onBack }: { room: Room; onBack: () => void }) {
   const [viewers, setViewers] = useState<number | null>(null);
   const [error, setError] = useState('');
   const [viewMode, setViewMode] = useState<ViewMode>('desktop');
+  const [virtualGuestsEnabled, setVirtualGuestsEnabled] = useState(true);
   const [rainSettings, setRainSettings] = useState<RainSettings>({ automatic: true, maxDelayMinutes: 3, durationSeconds: 45 });
   const [isRaining, setIsRaining] = useState(false);
   const [kidnappingSettings, setKidnappingSettings] = useState<KidnappingSettings>({ automatic: true, maxDelayMinutes: 5 });
@@ -414,6 +415,10 @@ function RoomScreen({ room, onBack }: { room: Room; onBack: () => void }) {
       <div className="room-titlebar"><div><button className="back-button" onClick={onBack}>← Tất cả phòng</button><span className="eyebrow">{room.theme === 'sidewalk-cafe' ? 'CÀ PHÊ VỈA HÈ' : 'PHÒNG TRÀ'} / {room.platform === 'youtube' ? `YouTube · ${room.youtubeLiveId}` : `TikTok · @${room.tiktokUsername}`}</span><h1>{room.name}</h1></div><div className="room-actions"><div className="view-mode-switch" role="group" aria-label="Chế độ hiển thị"><button type="button" className={viewMode === 'phone' ? 'active' : ''} onClick={() => changeViewMode('phone')} aria-pressed={viewMode === 'phone'}>▯ Điện thoại</button><button type="button" className={viewMode === 'desktop' ? 'active' : ''} onClick={() => changeViewMode('desktop')} aria-pressed={viewMode === 'desktop'}>▭ Desktop</button></div><div className="room-controls"><span className={`live-pill ${status.state}`}><span />{status.state === 'connected' ? 'ĐANG LIVE' : status.state === 'connecting' ? 'ĐANG KẾT NỐI' : 'CHƯA LIVE'}</span>{status.state === 'connected' ? <button className="secondary-button" onClick={disconnect}>Ngắt kết nối</button> : <button className="primary-button" disabled={status.state === 'connecting'} onClick={reconnect}>Kết nối lại</button>}</div></div></div>
       {error && <p className="notice error" role="alert">{error}</p>}
       <AudioManager room={room} onError={setError} />
+      <section className="weather-controls" aria-label="Khách ảo trong quán">
+        <div className="weather-heading"><span className="weather-icon" aria-hidden="true">☕</span><div><span className="eyebrow">KHÁCH ẢO</span><strong>10 khách trò chuyện tự động trong quán</strong></div></div>
+        <label className="weather-toggle"><input type="checkbox" checked={virtualGuestsEnabled} onChange={(event) => setVirtualGuestsEnabled(event.target.checked)} /><span /> Bật khách ảo</label>
+      </section>
       {room.theme === 'sidewalk-cafe' && <section className="weather-controls" aria-label="Điều khiển thời tiết">
         <div className="weather-heading"><span className={`weather-icon ${isRaining ? 'raining' : ''}`}>{isRaining ? '🌧' : '☁'}</span><div><span className="eyebrow">THỜI TIẾT QUÁN</span><strong>{isRaining ? 'Đang mưa · bạt đã được kéo ra' : rainSettings.automatic ? `Mưa ngẫu nhiên trong tối đa ${rainSettings.maxDelayMinutes} phút` : 'Mưa tự động đang tắt'}</strong></div></div>
         <label className="weather-toggle"><input type="checkbox" checked={rainSettings.automatic} onChange={(event) => setRainSettings((current) => ({ ...current, automatic: event.target.checked }))} /><span /> Mưa tự động</label>
@@ -428,7 +433,7 @@ function RoomScreen({ room, onBack }: { room: Room; onBack: () => void }) {
         <button type="button" className="danger-button" disabled={kidnapping.phase !== 'idle' || guests.length < 2} onClick={startKidnapping}>🚐 Bắt cóc ngay</button>
       </section>}
       <div className={`room-layout ${viewMode}-view`}>
-        <div className="scene-column"><div className="stream-stage" ref={stageRef}><Scene theme={room.theme} guests={guests} comments={comments} gifts={gifts} viewMode={viewMode} isRaining={isRaining} kidnapping={kidnapping} showYouTubeJoinNotice={room.platform === 'youtube'} /></div><div className="scene-footer"><span><i className="status-dot" />{status.message}</span><span>{room.platform === 'youtube' ? 'YouTube LIVE' : `${viewers === null ? '—' : viewers.toLocaleString('vi-VN')} người xem TikTok`} · {guests.length} khách trong quán</span><button type="button" className="fullscreen-button" onClick={openFullscreen}>⛶ Toàn màn hình</button></div></div>
+        <div className="scene-column"><div className="stream-stage" ref={stageRef}><Scene theme={room.theme} guests={guests} comments={comments} gifts={gifts} viewMode={viewMode} isRaining={isRaining} kidnapping={kidnapping} showYouTubeJoinNotice={room.platform === 'youtube'} virtualGuestsEnabled={virtualGuestsEnabled} /></div><div className="scene-footer"><span><i className="status-dot" />{status.message}</span><span>{room.platform === 'youtube' ? 'YouTube LIVE' : `${viewers === null ? '—' : viewers.toLocaleString('vi-VN')} người xem TikTok`} · {guests.length} khách LIVE{virtualGuestsEnabled ? ' · 10 khách ảo' : ''}</span><button type="button" className="fullscreen-button" onClick={openFullscreen}>⛶ Toàn màn hình</button></div></div>
         <aside className="chat-panel"><div className="chat-head"><div><span className="eyebrow">CUỘC TRÒ CHUYỆN</span><h2>Bình luận LIVE</h2></div><span className="chat-count">{comments.length}</span></div><div className="chat-list">{comments.length ? comments.map((comment) => <div className="chat-line" key={comment.id}><Avatar avatar={comment.avatar} name={comment.nickname} /><div><div className="chat-meta"><strong>{comment.nickname}</strong><time>{new Date(comment.timestamp).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}</time></div><p>{comment.comment}</p></div></div>) : <div className="chat-empty"><span>💬</span><strong>Chưa có lời nhắn</strong><p>Khi có bình luận, bong bóng chat sẽ hiện trên nhân vật trong quán.</p></div>}</div><div className="chat-foot">Tin nhắn được lấy trực tiếp từ {room.platform === 'youtube' ? 'YouTube' : 'TikTok'} LIVE</div></aside>
       </div>
     </main>
@@ -599,12 +604,85 @@ const staffDialogues = [
   { speaker: 'executive', name: 'Minh', message: 'Cà phê đen ít đường của anh đây. Chúc anh ngon miệng.' },
 ] as const;
 
-function Scene({ theme, guests, comments, gifts, viewMode, isRaining, kidnapping, showYouTubeJoinNotice }: { theme: Theme; guests: Guest[]; comments: Comment[]; gifts: Gift[]; viewMode: ViewMode; isRaining: boolean; kidnapping: KidnappingEvent; showYouTubeJoinNotice: boolean }) {
+const virtualGuests: Guest[] = ['An', 'Bình', 'Chi', 'Dũng', 'Hà', 'Khoa', 'Linh', 'Nam', 'Thảo', 'Vy'].map((name, index) => ({
+  id: `virtual:${index}`, username: `khach_ao_${index + 1}`, nickname: name,
+  // Half slots sit between LIVE seats, keeping all ten guests scattered in the
+  // same area without moving anyone when real viewers arrive, even at capacity.
+  avatar: '', seat: index * 19 + 0.5, joinedAt: 0, isVirtual: true,
+}));
+
+// Keep each exchange together so replies follow the same topic.
+const virtualConversations = [
+  ['Nãy tính ghé mười phút thôi á.', 'Rồi giờ ngồi bao lâu rồi?', 'Thôi đừng hỏi giờ, đang vui mà.'],
+  ['Ủa mình để điện thoại đâu rồi ta?', 'Cái đang cầm trên tay đó hả?', 'À… coi như chưa nghe gì nha.'],
+  ['Tối nay ăn gì đây?', 'Câu này khó hơn đi làm nữa.', 'Hay cứ quán quen?', 'Nãy giờ suy nghĩ cuối cùng vẫn vậy ha.'],
+  ['Hôm qua thức khuya, giờ hơi đơ rồi.', 'Lại xem thêm đúng một tập chứ gì?', 'Ừ, mà một tập hơi nhiều lần.'],
+  ['Cho mình ngồi ké chỗ này nha.', 'Ngồi đi, đang tám chuyện linh tinh thôi.', 'Vậy đúng sở trường rồi.'],
+  ['Định cuối tuần dọn phòng.', 'Nghe quen quen, tuần trước cũng nói vậy.', 'Thì mình đang lên kế hoạch kỹ mà.'],
+  ['Có ai thấy đói không?', 'Vừa ăn xong mà?', 'Đó là chuyện của nửa tiếng trước.'],
+  ['Bữa nay đường đông ghê.', 'Ừ, mình đứng đèn đỏ mấy lượt mới qua.', 'Tới đây ngồi được là không muốn về nữa.'],
+  ['Chụp giùm mình tấm hình đi.', 'Rồi, cười tự nhiên coi.', 'Nói vậy tự nhiên quên cách cười luôn.'],
+  ['Mình mới mua cuốn sách hay lắm.', 'Đọc tới đâu rồi?', 'Tới đoạn bóc bọc nilon.'],
+  ['Sáng nay báo thức reo mà tưởng trong mơ.', 'Rồi có dậy không?', 'Có, dậy tắt báo thức.'],
+  ['Ngồi đây gió mát ha.', 'Ừ, để điện thoại xuống chút cũng dễ chịu.', 'Lâu lâu ngồi không vậy mà thích.'],
+  ['Nãy thấy con mèo nằm ngủ ngoài cửa.', 'Nó chọn chỗ mát giỏi thật.', 'Ước gì chiều nay mình cũng được ngủ như nó.'],
+  ['Mai mình thử dậy sớm đi bộ.', 'Mấy giờ?', 'Để coi mai thức lúc nào đã.'],
+  ['Ê, ly của ai bên này vậy?', 'Của mình á, đưa giùm với.', 'Đây, tưởng ai bỏ quên.'],
+  ['Lâu rồi mới ngồi nói chuyện thoải mái vầy.', 'Ừ, mọi bữa cứ vội vội vàng vàng.', 'Hôm nay ngồi thêm chút đi.'],
+];
+
+function useVirtualConversation(enabled: boolean) {
+  const [comment, setComment] = useState<Comment | null>(null);
+  useEffect(() => {
+    if (!enabled) return;
+    let timer: number;
+    let remaining: number[] = [];
+    let previousTopic = -1;
+    let lines: string[] = [];
+    let speakers: Guest[] = [];
+    let lineIndex = 0;
+    let sequence = 0;
+    const speak = () => {
+      if (lineIndex >= lines.length) {
+        if (!remaining.length) remaining = virtualConversations.map((_, index) => index);
+        const choices = remaining.filter((index) => index !== previousTopic);
+        const topic = choices[Math.floor(Math.random() * choices.length)];
+        remaining = remaining.filter((index) => index !== topic);
+        previousTopic = topic;
+        lines = virtualConversations[topic];
+        const first = Math.floor(Math.random() * virtualGuests.length);
+        const second = (first + 1 + Math.floor(Math.random() * (virtualGuests.length - 1))) % virtualGuests.length;
+        speakers = [virtualGuests[first], virtualGuests[second]];
+        lineIndex = 0;
+      }
+      const speaker = speakers[lineIndex % speakers.length];
+      const message = lines[lineIndex++];
+      setComment({
+        id: `virtual-chat:${++sequence}`, guestId: speaker.id,
+        username: speaker.username, nickname: speaker.nickname, avatar: '',
+        comment: message, timestamp: Date.now(),
+      });
+      // Brief pauses between replies; a longer quiet moment between topics.
+      const delay = lineIndex === lines.length
+        ? 12000 + Math.random() * 10000
+        : 3500 + message.length * 25 + Math.random() * 1800;
+      timer = window.setTimeout(speak, delay);
+    };
+    setComment(null);
+    timer = window.setTimeout(speak, 1500 + Math.random() * 2500);
+    return () => window.clearTimeout(timer);
+  }, [enabled]);
+  return enabled ? comment : null;
+}
+
+function Scene({ theme, guests, comments, gifts, viewMode, isRaining, kidnapping, showYouTubeJoinNotice, virtualGuestsEnabled }: { theme: Theme; guests: Guest[]; comments: Comment[]; gifts: Gift[]; viewMode: ViewMode; isRaining: boolean; kidnapping: KidnappingEvent; showYouTubeJoinNotice: boolean; virtualGuestsEnabled: boolean }) {
   const [now, setNow] = useState(Date.now());
   useEffect(() => { const timer = window.setInterval(() => setNow(Date.now()), 500); return () => clearInterval(timer); }, []);
   const dialogue = staffDialogues[Math.floor(now / 6000) % staffDialogues.length];
   const showStaffBubble = now % 6000 < 5000;
-  const crowdDensity = getCrowdDensity(guests.length);
+  const sceneGuests = virtualGuestsEnabled ? [...guests, ...virtualGuests] : guests;
+  const virtualComment = useVirtualConversation(virtualGuestsEnabled && kidnapping.phase === 'idle');
+  const crowdDensity = getCrowdDensity(sceneGuests.length);
   const guestSize = getGuestSize(viewMode);
   const latestGift = gifts.find((gift) => now - gift.timestamp < 12000);
   const hostageIds = new Set(kidnapping.hostages.map((hostage) => hostage.id));
@@ -650,16 +728,16 @@ function Scene({ theme, guests, comments, gifts, viewMode, isRaining, kidnapping
         </div>;
       })}
     </div>}
-    {guests.filter((guest) => !(hiddenHostages && hostageIds.has(guest.id))).map((guest) => {
+    {sceneGuests.filter((guest) => !(hiddenHostages && hostageIds.has(guest.id))).map((guest) => {
       const { left, top, depth } = getSeatPosition(guest.seat, viewMode);
       const guestStyle = getGuestStyle(guest);
-      return <div className={`scene-guest chair-${guest.seat % 2}`} key={guest.id} style={{ left: `${left}%`, top: `${top}%`, width: guestSize.width, height: guestSize.height, zIndex: 5 + depth }} title={`@${guest.username}`}>
+      return <div className={`scene-guest chair-${Math.floor(guest.seat) % 2}`} key={guest.id} style={{ left: `${left}%`, top: `${top}%`, width: guestSize.width, height: guestSize.height, zIndex: 5 + depth }} title={`@${guest.username}`}>
         <div className="guest-name"><Avatar avatar={guest.avatar} name={guest.nickname} /><span>{guest.nickname}</span></div>
         <div className="guest-chair" />
         <div className="guest-character"><img src={guestStyle.src} alt={`${guest.nickname} trong trang phục ${guestStyle.label}`} /></div>
       </div>;
     })}
-    {guests.length === 0 && <div className="scene-placeholder"><span>☕</span><strong>Quán đang chờ khách</strong><small>Khách vào LIVE sẽ xuống quán và tìm ghế ngồi.</small></div>}
+    {sceneGuests.length === 0 && <div className="scene-placeholder"><span>☕</span><strong>Quán đang chờ khách</strong><small>Khách vào LIVE sẽ xuống quán và tìm ghế ngồi.</small></div>}
     {theme === 'sidewalk-cafe' && isRaining && <div className="cafe-rain-shelter" aria-hidden="true"><div className="tarp"><span className="tarp-seam seam-one" /><span className="tarp-seam seam-two" /><span className="tarp-drip drip-one" /><span className="tarp-drip drip-two" /><span className="tarp-drip drip-three" /></div><span className="tarp-pole pole-left" /><span className="tarp-pole pole-right" /></div>}
     <div className="scene-dialogue-layer">
       {theme === 'sidewalk-cafe' && <>
@@ -667,11 +745,13 @@ function Scene({ theme, guests, comments, gifts, viewMode, isRaining, kidnapping
         <div className="staff-dialogue-anchor staff-maid">{showStaffBubble && dialogue.speaker === 'maid' && <div className="staff-bubble"><strong>{dialogue.name}</strong>{dialogue.message}</div>}</div>
         <div className="staff-dialogue-anchor staff-executive">{showStaffBubble && dialogue.speaker === 'executive' && <div className="staff-bubble"><strong>{dialogue.name}</strong>{dialogue.message}</div>}</div>
       </>}
-      {guests.map((guest) => {
-        const latest = comments.find((comment) => comment.guestId === guest.id);
+      {sceneGuests.map((guest) => {
+        const latest = guest.isVirtual
+          ? (virtualComment?.guestId === guest.id ? virtualComment : null)
+          : comments.find((comment) => comment.guestId === guest.id);
         if (!latest || now - latest.timestamp >= 7000) return null;
         const { left, top } = getSeatPosition(guest.seat, viewMode);
-        return <div className="scene-dialogue-guest" key={latest.id} style={{ left: `${left}%`, top: `${top}%`, width: guestSize.width, height: guestSize.height }}><div className="speech-bubble"><span className="speech-speaker"><strong>{latest.nickname}</strong><small>@{latest.username}</small></span><span className="speech-message">{latest.comment}</span></div></div>;
+        return <div className="scene-dialogue-guest" key={latest.id} style={{ left: `${left}%`, top: `${top}%`, width: guestSize.width, height: guestSize.height }}><div className="speech-bubble"><span className="speech-speaker"><strong>{latest.nickname}</strong>{!guest.isVirtual && <small>@{latest.username}</small>}</span><span className="speech-message">{latest.comment}</span></div></div>;
       })}
     </div>
   </div>;
