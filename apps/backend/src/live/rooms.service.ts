@@ -1,7 +1,8 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
 import { StoreService } from '../auth/store.service';
-import type { AudioOrderMode, LiveRoom, RoomTheme } from './live.types';
+import type { AudioOrderMode, CreateRoomInput, LiveRoom } from './live.types';
+import { youtubeLiveId } from './youtube-source';
 
 @Injectable()
 export class RoomsService {
@@ -17,15 +18,19 @@ export class RoomsService {
     return room;
   }
 
-  async create(ownerId: string, input: { name?: string; theme?: RoomTheme; tiktokUsername?: string }) {
+  async create(ownerId: string, input: CreateRoomInput) {
     const name = String(input?.name ?? '').trim();
     const theme = input?.theme;
-    const tiktokUsername = this.cleanUsername(input?.tiktokUsername);
+    const platform = input?.platform ?? 'tiktok';
+    if (platform !== 'tiktok' && platform !== 'youtube') throw new BadRequestException('Nền tảng LIVE không hợp lệ.');
+    const tiktokUsername = platform === 'tiktok' ? this.cleanUsername(input?.tiktokUsername) : '';
+    const liveId = platform === 'youtube' ? youtubeLiveId(input?.youtubeLiveId) : '';
     if (name.length < 3 || name.length > 80) throw new BadRequestException('Tên phòng cần từ 3 đến 80 ký tự.');
     if (theme !== 'sidewalk-cafe' && theme !== 'tea-room') throw new BadRequestException('Chủ đề phòng không hợp lệ.');
-    if (!tiktokUsername) throw new BadRequestException('Username TikTok không hợp lệ.');
+    if (platform === 'tiktok' && !tiktokUsername) throw new BadRequestException('Username TikTok không hợp lệ.');
+    if (platform === 'youtube' && !liveId) throw new BadRequestException('Link hoặc video ID YouTube LIVE không hợp lệ. Hãy nhập link của phiên phát trực tiếp.');
     if (await this.store.rooms.countDocuments({ ownerId }) >= 20) throw new BadRequestException('Mỗi tài khoản được tạo tối đa 20 phòng.');
-    const room: LiveRoom = { id: randomUUID(), ownerId, name, theme, tiktokUsername, createdAt: new Date().toISOString(), audio: { trackIds: [], orderMode: 'manual' } };
+    const room: LiveRoom = { id: randomUUID(), ownerId, name, theme, platform, tiktokUsername, ...(liveId ? { youtubeLiveId: liveId } : {}), createdAt: new Date().toISOString(), audio: { trackIds: [], orderMode: 'manual' } };
     await this.store.rooms.insertOne(room);
     return room;
   }

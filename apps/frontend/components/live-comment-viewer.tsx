@@ -4,12 +4,13 @@ import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, 
 import { io, type Socket } from 'socket.io-client';
 
 type Theme = 'sidewalk-cafe' | 'tea-room';
+type LivePlatform = 'tiktok' | 'youtube';
 type ViewMode = 'desktop' | 'phone';
 type Status = { state: 'connected' | 'connecting' | 'disconnected'; message: string; username?: string };
 type User = { id: string; name: string; email: string };
 type AudioOrderMode = 'manual' | 'random' | 'name' | 'createdAt';
 type AudioTrack = { id: string; name: string; url: string; mimeType: string; size: number; createdAt: string };
-type Room = { id: string; name: string; theme: Theme; tiktokUsername: string; createdAt: string; audio?: { trackIds: string[]; orderMode: AudioOrderMode } };
+type Room = { id: string; name: string; theme: Theme; platform?: LivePlatform; tiktokUsername: string; youtubeLiveId?: string; createdAt: string; audio?: { trackIds: string[]; orderMode: AudioOrderMode } };
 type Guest = { id: string; username: string; nickname: string; avatar: string; seat: number; joinedAt: number };
 type Comment = { id: string; guestId: string; username: string; nickname: string; avatar: string; comment: string; timestamp: number };
 type Gift = { id: string; guestId: string; username: string; nickname: string; avatar: string; giftId: string; giftName: string; giftImage: string; count: number; diamonds: number; timestamp: number };
@@ -22,7 +23,7 @@ type KidnappingEvent = { phase: KidnappingPhase; hostages: Guest[]; deadline: nu
 
 const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL ?? 'http://localhost:3001';
 const MAX_AUDIO_FILE_SIZE = 100 * 1024 * 1024;
-const emptyStatus: Status = { state: 'disconnected', message: 'Chưa kết nối TikTok LIVE' };
+const emptyStatus: Status = { state: 'disconnected', message: 'Chưa kết nối LIVE' };
 
 async function api<T>(path: string, method = 'GET', body?: object | FormData): Promise<T> {
   const isForm = body instanceof FormData;
@@ -109,7 +110,7 @@ function AuthScreen({ onSuccess }: { onSuccess: (user: User) => void }) {
       <div className="auth-hero">
         <span className="eyebrow">LIVE QUÁN · THẾ GIỚI 2D</span>
         <h1>Biến buổi LIVE thành <em>một quán nhỏ.</em></h1>
-        <p>Người xem bước vào, chọn ghế và trò chuyện. Mỗi bình luận TikTok trở thành một câu chuyện ngay trong quán của bạn.</p>
+        <p>Người xem bước vào, chọn ghế và trò chuyện. Mỗi bình luận TikTok hoặc YouTube trở thành một câu chuyện ngay trong quán của bạn.</p>
         <div className="preview-scene" aria-hidden="true"><span>☕</span><span>🪑</span><span>💬</span></div>
       </div>
       <section className="auth-card">
@@ -137,7 +138,9 @@ const themeOptions: { id: Theme; icon: string; title: string; description: strin
 function Dashboard({ rooms, onOpen, onCreated }: { rooms: Room[]; onOpen: (room: Room) => void; onCreated: (room: Room) => void }) {
   const [theme, setTheme] = useState<Theme>('sidewalk-cafe');
   const [name, setName] = useState('Cà phê vỉa hè');
+  const [platform, setPlatform] = useState<LivePlatform>('tiktok');
   const [tiktokUsername, setTiktokUsername] = useState('');
+  const [youtubeLiveId, setYoutubeLiveId] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
 
@@ -146,7 +149,7 @@ function Dashboard({ rooms, onOpen, onCreated }: { rooms: Room[]; onOpen: (room:
     setBusy(true);
     setError('');
     try {
-      const room = await api<Room>('/rooms', 'POST', { theme, name, tiktokUsername });
+      const room = await api<Room>('/rooms', 'POST', { theme, name, platform, ...(platform === 'youtube' ? { youtubeLiveId } : { tiktokUsername }) });
       onCreated(room);
     } catch (cause) { setError((cause as Error).message); }
     finally { setBusy(false); }
@@ -154,7 +157,7 @@ function Dashboard({ rooms, onOpen, onCreated }: { rooms: Room[]; onOpen: (room:
 
   return (
     <main className="dashboard">
-      <section className="dashboard-intro"><span className="eyebrow">BẢNG ĐIỀU KHIỂN</span><h1>Mở quán, bật LIVE,<br /><em>mọi người sẽ ghé.</em></h1><p>Chọn không gian cho buổi phát và kết nối tài khoản TikTok đang LIVE.</p></section>
+      <section className="dashboard-intro"><span className="eyebrow">BẢNG ĐIỀU KHIỂN</span><h1>Mở quán, bật LIVE,<br /><em>mọi người sẽ ghé.</em></h1><p>Chọn không gian cho buổi phát và kết nối phiên TikTok hoặc YouTube đang LIVE.</p></section>
       <section className="create-panel">
         <div className="section-heading"><div><span className="eyebrow">01 / KHÔNG GIAN</span><h2>Tạo phòng LIVE mới</h2></div><span className="step-badge">Tối đa 20 phòng</span></div>
         <form onSubmit={create}>
@@ -163,14 +166,17 @@ function Dashboard({ rooms, onOpen, onCreated }: { rooms: Room[]; onOpen: (room:
           </div>
           <div className="form-grid">
             <label>Tên phòng <input value={name} onChange={(event) => setName(event.target.value)} minLength={3} maxLength={80} required placeholder="Đặt tên quán của bạn" /></label>
-            <label>TikTok username hoặc link LIVE <input value={tiktokUsername} onChange={(event) => setTiktokUsername(event.target.value)} required placeholder="@username hoặc tiktok.com/@username/live" /></label>
+            <label>Nền tảng LIVE <select value={platform} onChange={(event) => { setPlatform(event.target.value as LivePlatform); setError(''); }} disabled={busy}><option value="tiktok">TikTok LIVE</option><option value="youtube">YouTube LIVE</option></select></label>
+            {platform === 'youtube'
+              ? <label>Link hoặc video ID YouTube LIVE <input value={youtubeLiveId} onChange={(event) => setYoutubeLiveId(event.target.value)} required placeholder="https://www.youtube.com/watch?v=..." /><small>Nhập link phiên đang phát công khai, có bật chat. Khách xuất hiện khi gửi bình luận.</small></label>
+              : <label>TikTok username hoặc link LIVE <input value={tiktokUsername} onChange={(event) => setTiktokUsername(event.target.value)} required placeholder="@username hoặc tiktok.com/@username/live" /></label>}
           </div>
           {error && <p className="form-error" role="alert">{error}</p>}
           <div className="form-footer"><p>Phòng được lưu vào tài khoản của bạn. Kết nối bắt đầu khi bạn mở phòng.</p><button className="primary-button" disabled={busy} type="submit">{busy ? 'Đang tạo…' : 'Tạo & mở phòng →'}</button></div>
         </form>
       </section>
       <section className="saved-rooms"><div className="section-heading"><div><span className="eyebrow">02 / PHÒNG CỦA BẠN</span><h2>Quán đã tạo</h2></div><span className="step-badge">{rooms.length} phòng</span></div>
-        {rooms.length === 0 ? <div className="empty-rooms">Chưa có phòng nào. Chọn một không gian ở trên để bắt đầu.</div> : <div className="room-grid">{rooms.map((room) => <button className="room-card" key={room.id} onClick={() => onOpen(room)}><span className="room-art">{room.theme === 'sidewalk-cafe' ? '☕' : '♫'}</span><span className="room-info"><strong>{room.name}</strong><small>@{room.tiktokUsername} · {room.theme === 'sidewalk-cafe' ? 'Cà phê vỉa hè' : 'Phòng trà'}</small></span><span className="room-arrow">↗</span></button>)}</div>}
+        {rooms.length === 0 ? <div className="empty-rooms">Chưa có phòng nào. Chọn một không gian ở trên để bắt đầu.</div> : <div className="room-grid">{rooms.map((room) => <button className="room-card" key={room.id} onClick={() => onOpen(room)}><span className="room-art">{room.theme === 'sidewalk-cafe' ? '☕' : '♫'}</span><span className="room-info"><strong>{room.name}</strong><small>{room.platform === 'youtube' ? `YouTube · ${room.youtubeLiveId}` : `TikTok · @${room.tiktokUsername}`} · {room.theme === 'sidewalk-cafe' ? 'Cà phê vỉa hè' : 'Phòng trà'}</small></span><span className="room-arrow">↗</span></button>)}</div>}
       </section>
     </main>
   );
@@ -358,7 +364,7 @@ function RoomScreen({ room, onBack }: { room: Room; onBack: () => void }) {
         setViewers(reply.data.viewers);
         if (reply.data.status.state === 'disconnected') {
           connection.emit('live:connect', { roomId: room.id }, (result: Reply) => {
-            if (!result.ok) setError(result.message ?? 'Kết nối TikTok thất bại.');
+            if (!result.ok) setError(result.message ?? 'Kết nối LIVE thất bại.');
           });
         }
       });
@@ -386,7 +392,7 @@ function RoomScreen({ room, onBack }: { room: Room; onBack: () => void }) {
   function reconnect() {
     setError('');
     socket?.emit('live:connect', { roomId: room.id }, (reply: Reply) => {
-      if (!reply.ok) setError(reply.message ?? 'Kết nối TikTok thất bại.');
+      if (!reply.ok) setError(reply.message ?? 'Kết nối LIVE thất bại.');
     });
   }
 
@@ -405,7 +411,7 @@ function RoomScreen({ room, onBack }: { room: Room; onBack: () => void }) {
 
   return (
     <main className="room-page">
-      <div className="room-titlebar"><div><button className="back-button" onClick={onBack}>← Tất cả phòng</button><span className="eyebrow">{room.theme === 'sidewalk-cafe' ? 'CÀ PHÊ VỈA HÈ' : 'PHÒNG TRÀ'} / @{room.tiktokUsername}</span><h1>{room.name}</h1></div><div className="room-actions"><div className="view-mode-switch" role="group" aria-label="Chế độ hiển thị"><button type="button" className={viewMode === 'phone' ? 'active' : ''} onClick={() => changeViewMode('phone')} aria-pressed={viewMode === 'phone'}>▯ Điện thoại</button><button type="button" className={viewMode === 'desktop' ? 'active' : ''} onClick={() => changeViewMode('desktop')} aria-pressed={viewMode === 'desktop'}>▭ Desktop</button></div><div className="room-controls"><span className={`live-pill ${status.state}`}><span />{status.state === 'connected' ? 'ĐANG LIVE' : status.state === 'connecting' ? 'ĐANG KẾT NỐI' : 'CHƯA LIVE'}</span>{status.state === 'connected' ? <button className="secondary-button" onClick={disconnect}>Ngắt kết nối</button> : <button className="primary-button" disabled={status.state === 'connecting'} onClick={reconnect}>Kết nối lại</button>}</div></div></div>
+      <div className="room-titlebar"><div><button className="back-button" onClick={onBack}>← Tất cả phòng</button><span className="eyebrow">{room.theme === 'sidewalk-cafe' ? 'CÀ PHÊ VỈA HÈ' : 'PHÒNG TRÀ'} / {room.platform === 'youtube' ? `YouTube · ${room.youtubeLiveId}` : `TikTok · @${room.tiktokUsername}`}</span><h1>{room.name}</h1></div><div className="room-actions"><div className="view-mode-switch" role="group" aria-label="Chế độ hiển thị"><button type="button" className={viewMode === 'phone' ? 'active' : ''} onClick={() => changeViewMode('phone')} aria-pressed={viewMode === 'phone'}>▯ Điện thoại</button><button type="button" className={viewMode === 'desktop' ? 'active' : ''} onClick={() => changeViewMode('desktop')} aria-pressed={viewMode === 'desktop'}>▭ Desktop</button></div><div className="room-controls"><span className={`live-pill ${status.state}`}><span />{status.state === 'connected' ? 'ĐANG LIVE' : status.state === 'connecting' ? 'ĐANG KẾT NỐI' : 'CHƯA LIVE'}</span>{status.state === 'connected' ? <button className="secondary-button" onClick={disconnect}>Ngắt kết nối</button> : <button className="primary-button" disabled={status.state === 'connecting'} onClick={reconnect}>Kết nối lại</button>}</div></div></div>
       {error && <p className="notice error" role="alert">{error}</p>}
       <AudioManager room={room} onError={setError} />
       {room.theme === 'sidewalk-cafe' && <section className="weather-controls" aria-label="Điều khiển thời tiết">
@@ -422,8 +428,8 @@ function RoomScreen({ room, onBack }: { room: Room; onBack: () => void }) {
         <button type="button" className="danger-button" disabled={kidnapping.phase !== 'idle' || guests.length < 2} onClick={startKidnapping}>🚐 Bắt cóc ngay</button>
       </section>}
       <div className={`room-layout ${viewMode}-view`}>
-        <div className="scene-column"><div className="stream-stage" ref={stageRef}><Scene theme={room.theme} guests={guests} comments={comments} gifts={gifts} viewMode={viewMode} isRaining={isRaining} kidnapping={kidnapping} /></div><div className="scene-footer"><span><i className="status-dot" />{status.message}</span><span>{viewers === null ? '—' : viewers.toLocaleString('vi-VN')} người xem TikTok · {guests.length} khách trong quán</span><button type="button" className="fullscreen-button" onClick={openFullscreen}>⛶ Toàn màn hình</button></div></div>
-        <aside className="chat-panel"><div className="chat-head"><div><span className="eyebrow">CUỘC TRÒ CHUYỆN</span><h2>Bình luận LIVE</h2></div><span className="chat-count">{comments.length}</span></div><div className="chat-list">{comments.length ? comments.map((comment) => <div className="chat-line" key={comment.id}><Avatar avatar={comment.avatar} name={comment.nickname} /><div><div className="chat-meta"><strong>{comment.nickname}</strong><time>{new Date(comment.timestamp).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}</time></div><p>{comment.comment}</p></div></div>) : <div className="chat-empty"><span>💬</span><strong>Chưa có lời nhắn</strong><p>Khi có bình luận, bong bóng chat sẽ hiện trên nhân vật trong quán.</p></div>}</div><div className="chat-foot">Tin nhắn được lấy trực tiếp từ TikTok LIVE</div></aside>
+        <div className="scene-column"><div className="stream-stage" ref={stageRef}><Scene theme={room.theme} guests={guests} comments={comments} gifts={gifts} viewMode={viewMode} isRaining={isRaining} kidnapping={kidnapping} /></div><div className="scene-footer"><span><i className="status-dot" />{status.message}</span><span>{room.platform === 'youtube' ? 'YouTube LIVE' : `${viewers === null ? '—' : viewers.toLocaleString('vi-VN')} người xem TikTok`} · {guests.length} khách trong quán</span><button type="button" className="fullscreen-button" onClick={openFullscreen}>⛶ Toàn màn hình</button></div></div>
+        <aside className="chat-panel"><div className="chat-head"><div><span className="eyebrow">CUỘC TRÒ CHUYỆN</span><h2>Bình luận LIVE</h2></div><span className="chat-count">{comments.length}</span></div><div className="chat-list">{comments.length ? comments.map((comment) => <div className="chat-line" key={comment.id}><Avatar avatar={comment.avatar} name={comment.nickname} /><div><div className="chat-meta"><strong>{comment.nickname}</strong><time>{new Date(comment.timestamp).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}</time></div><p>{comment.comment}</p></div></div>) : <div className="chat-empty"><span>💬</span><strong>Chưa có lời nhắn</strong><p>Khi có bình luận, bong bóng chat sẽ hiện trên nhân vật trong quán.</p></div>}</div><div className="chat-foot">Tin nhắn được lấy trực tiếp từ {room.platform === 'youtube' ? 'YouTube' : 'TikTok'} LIVE</div></aside>
       </div>
     </main>
   );

@@ -7,6 +7,7 @@ import { AuthService } from '../auth/auth.service';
 import { sessionToken } from '../auth/session';
 import { RoomsService } from './rooms.service';
 import { TikTokLiveService } from './tiktok-live.service';
+import { YouTubeLiveService } from './youtube-live.service';
 import type { SocketReply, RoomSnapshot } from './live.types';
 
 @WebSocketGateway({
@@ -22,9 +23,17 @@ export class LiveGateway implements OnGatewayInit, OnGatewayConnection {
     private readonly auth: AuthService,
     private readonly rooms: RoomsService,
     private readonly tikTokLive: TikTokLiveService,
+    private readonly youTubeLive: YouTubeLiveService,
   ) {}
 
-  afterInit(server: Server) { this.tikTokLive.setServer(server); }
+  afterInit(server: Server) {
+    this.tikTokLive.setServer(server);
+    this.youTubeLive.setServer(server);
+  }
+
+  private provider(room: { platform?: string }) {
+    return room.platform === 'youtube' ? this.youTubeLive : this.tikTokLive;
+  }
 
   disconnectSession(token?: string) {
     if (!token || !this.server) return;
@@ -50,9 +59,10 @@ export class LiveGateway implements OnGatewayInit, OnGatewayConnection {
   @SubscribeMessage('room:join')
   async join(@ConnectedSocket() client: Socket, @MessageBody() payload: { roomId?: string } = {}): Promise<SocketReply<RoomSnapshot>> {
     const roomId = String(payload?.roomId ?? '');
-    if (!await this.ownedRoom(client, roomId)) return { ok: false, message: 'Bạn không có quyền vào phòng này.' };
+    const room = await this.ownedRoom(client, roomId);
+    if (!room) return { ok: false, message: 'Bạn không có quyền vào phòng này.' };
     await client.join(`room:${roomId}`);
-    return { ok: true, data: this.tikTokLive.snapshot(roomId) };
+    return { ok: true, data: this.provider(room).snapshot(roomId) };
   }
 
   @SubscribeMessage('room:leave')
@@ -66,18 +76,19 @@ export class LiveGateway implements OnGatewayInit, OnGatewayConnection {
     const room = await this.ownedRoom(client, String(payload?.roomId ?? ''));
     if (!room) return { ok: false, message: 'Bạn không có quyền điều khiển phòng này.' };
     try {
-      await this.tikTokLive.connect(room);
+      await this.provider(room).connect(room);
       return { ok: true };
     } catch (error) {
-      return { ok: false, message: this.tikTokLive.publicError(error) };
+      return { ok: false, message: this.provider(room).publicError(error) };
     }
   }
 
   @SubscribeMessage('live:disconnect')
   async disconnect(@ConnectedSocket() client: Socket, @MessageBody() payload: { roomId?: string } = {}): Promise<SocketReply> {
     const roomId = String(payload?.roomId ?? '');
-    if (!await this.ownedRoom(client, roomId)) return { ok: false, message: 'Bạn không có quyền điều khiển phòng này.' };
-    this.tikTokLive.disconnect(roomId);
+    const room = await this.ownedRoom(client, roomId);
+    if (!room) return { ok: false, message: 'Bạn không có quyền điều khiển phòng này.' };
+    this.provider(room).disconnect(roomId);
     return { ok: true };
   }
 }

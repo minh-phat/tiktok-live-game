@@ -197,7 +197,8 @@ em {
   font-size: 13px;
   font-weight: 700;
 }
-input {
+input,
+.form-grid select {
   width: 100%;
   padding: 14px 15px;
   border: 1px solid #49453d;
@@ -206,7 +207,8 @@ input {
   background: #161713;
   color: var(--ink);
 }
-input:focus {
+input:focus,
+.form-grid select:focus {
   border-color: var(--gold);
   box-shadow: 0 0 0 3px #e8b86b25;
 }

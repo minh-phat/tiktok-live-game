@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { LiveGateway } from './live/live.gateway';
 import { TikTokLiveService } from './live/tiktok-live.service';
+import { YouTubeLiveService } from './live/youtube-live.service';
 import { StoreService } from './auth/store.service';
 import { AuthService } from './auth/auth.service';
 import { AuthController } from './auth/auth.controller';
@@ -19,6 +20,6 @@ import { R2Service } from './audio/r2.service';
     }),
   ],
   controllers: [AuthController, RoomsController, AudioController],
-  providers: [StoreService, AuthService, RoomsService, AudioService, R2Service, LiveGateway, TikTokLiveService],
+  providers: [StoreService, AuthService, RoomsService, AudioService, R2Service, LiveGateway, TikTokLiveService, YouTubeLiveService],
 })
 export class AppModule {}

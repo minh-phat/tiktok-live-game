@@ -7,6 +7,7 @@
     "apps/*"
   ],
   "scripts": {
+    "test:youtube": "npm run test:youtube -w @tiktok-live/backend",
     "dev": "concurrently -n backend,frontend -c blue,magenta \"npm run dev -w @tiktok-live/backend\" \"npm run dev -w @tiktok-live/frontend\"",
     "dev:backend": "npm run dev -w @tiktok-live/backend",
     "dev:frontend": "npm run dev -w @tiktok-live/frontend",

@@ -3,7 +3,7 @@ import type { Request } from 'express';
 import { AuthService } from '../auth/auth.service';
 import { sessionToken } from '../auth/session';
 import { RoomsService } from './rooms.service';
-import type { RoomTheme } from './live.types';
+import type { CreateRoomInput } from './live.types';
 
 @Controller('rooms')
 export class RoomsController {
@@ -22,7 +22,7 @@ export class RoomsController {
   }
 
   @Post()
-  async create(@Req() request: Request, @Body() body: { name?: string; theme?: RoomTheme; tiktokUsername?: string }) {
+  async create(@Req() request: Request, @Body() body: CreateRoomInput) {
     const user = await this.auth.requireUser(sessionToken(request.headers.cookie));
     return this.rooms.create(user.id, body);
   }

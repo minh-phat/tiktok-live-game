@@ -63,16 +63,32 @@ try {
   assert.equal(created.data.tiktokUsername, 'demo_user');
   const roomId = created.data.id;
 
+  const youtube = await request(base, '/rooms', 'POST', {
+    name: 'Quán YouTube', theme: 'sidewalk-cafe', platform: 'youtube',
+    youtubeLiveId: 'https://www.youtube.com/live/abcdefgh_-1?si=share',
+  }, owner.cookie);
+  assert.equal(youtube.status, 201);
+  assert.equal(youtube.data.platform, 'youtube');
+  assert.equal(youtube.data.youtubeLiveId, 'abcdefgh_-1');
+  assert.equal((await request(base, '/rooms', 'POST', {
+    name: 'Quán lỗi', theme: 'sidewalk-cafe', platform: 'youtube', youtubeLiveId: 'invalid',
+  }, owner.cookie)).status, 400);
+
   const other = await request(base, '/auth/register', 'POST', {
     name: 'Khách khác', email: `other-${randomUUID()}@example.com`, password: 'password123',
   });
   assert.equal((await request(base, `/rooms/${roomId}`, 'GET', undefined, other.cookie)).status, 404);
+  assert.equal((await request(base, `/rooms/${youtube.data.id}`, 'GET', undefined, other.cookie)).status, 404);
 
   const ownerSocket = await connectSocket(base, owner.cookie);
   const otherSocket = await connectSocket(base, other.cookie);
   try {
     assert.equal((await join(ownerSocket, roomId)).ok, true);
     assert.equal((await join(otherSocket, roomId)).ok, false);
+    const youtubeSnapshot = await join(ownerSocket, youtube.data.id);
+    assert.equal(youtubeSnapshot.ok, true);
+    assert.match(youtubeSnapshot.data.status.message, /YouTube/);
+    assert.equal((await join(otherSocket, youtube.data.id)).ok, false);
     const disconnected = new Promise((resolve) => ownerSocket.once('disconnect', resolve));
     assert.equal((await request(base, '/auth/logout', 'POST', undefined, owner.cookie)).status, 201);
     await disconnected;
@@ -85,8 +101,9 @@ try {
   const login = await request(base, '/auth/login', 'POST', { email, password: 'password123' });
   assert.equal(login.status, 201);
   const rooms = await request(base, '/rooms', 'GET', undefined, login.cookie);
-  assert.equal(rooms.data.length, 1);
-  assert.equal(rooms.data[0].id, roomId);
+  assert.equal(rooms.data.length, 2);
+  assert.ok(rooms.data.some((room) => room.id === roomId));
+  assert.equal(rooms.data.find((room) => room.id === youtube.data.id).youtubeLiveId, 'abcdefgh_-1');
   console.log('MongoDB integration: đăng ký, phòng, phân quyền, đăng xuất và đăng nhập lại đều thành công.');
 } finally {
   if (app) await app.close();

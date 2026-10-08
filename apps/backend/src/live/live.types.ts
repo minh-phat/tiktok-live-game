@@ -1,4 +1,13 @@
 export type RoomTheme = 'sidewalk-cafe' | 'tea-room';
+export type LivePlatform = 'tiktok' | 'youtube';
+
+export interface CreateRoomInput {
+  name?: string;
+  theme?: RoomTheme;
+  platform?: LivePlatform;
+  tiktokUsername?: string;
+  youtubeLiveId?: string;
+}
 export type AudioOrderMode = 'manual' | 'random' | 'name' | 'createdAt';
 
 export interface AudioTrack {
@@ -23,6 +32,9 @@ export interface LiveRoom {
   name: string;
   theme: RoomTheme;
   tiktokUsername: string;
+  // Missing platform identifies legacy TikTok rooms.
+  platform?: LivePlatform;
+  youtubeLiveId?: string;
   createdAt: string;
   audio?: RoomAudioSettings;
 }

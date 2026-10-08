@@ -2,8 +2,8 @@ import type { Metadata } from 'next';
 import './globals.css';
 
 export const metadata: Metadata = {
-  title: 'TikTok LIVE Comment',
-  description: 'Theo dõi comment TikTok LIVE theo thời gian thực',
+  title: 'LIVE Quán · TikTok & YouTube',
+  description: 'Biến bình luận TikTok và YouTube LIVE thành một quán 2D',
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
