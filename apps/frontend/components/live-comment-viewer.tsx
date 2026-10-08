@@ -415,8 +415,10 @@ function getSeatPosition(seat: number, viewMode: ViewMode) {
   const row = Math.floor(slot / columns);
   const leftMin = viewMode === 'phone' ? 7 : 5;
   const leftMax = viewMode === 'phone' ? 93 : 95;
-  const topMin = viewMode === 'phone' ? 42 : 41;
-  const topMax = viewMode === 'phone' ? 92 : 91;
+  // Keep the bottom of every character above the curb. The desktop guest box
+  // extends ~12% below its center; on mobile it extends ~5.5% below.
+  const topMin = viewMode === 'phone' ? 48 : 54;
+  const topMax = viewMode === 'phone' ? 79 : 70;
   return {
     left: leftMin + ((column + 0.5) / columns) * (leftMax - leftMin),
     top: topMin + ((row + 0.5) / rows) * (topMax - topMin),

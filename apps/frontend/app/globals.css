@@ -1562,14 +1562,14 @@ input::placeholder {
 .staff-maid {
   z-index: 3;
   left: 10%;
-  top: 49%;
+  top: 44%;
   width: 14%;
   animation: maid-serving 45s ease-in-out infinite alternate;
 }
 .staff-executive {
   z-index: 2;
   left: 73%;
-  top: 59%;
+  top: 45%;
   width: 14%;
   animation: executive-serving 54s ease-in-out 2s infinite alternate;
 }
@@ -1606,12 +1606,12 @@ input::placeholder {
   width: 21%;
 }
 .scene-phone .staff-maid {
-  top: 47%;
+  top: 46%;
   width: 26%;
   animation-name: maid-serving-phone;
 }
 .scene-phone .staff-executive {
-  top: 66%;
+  top: 58%;
   width: 26%;
   animation-name: executive-serving-phone;
 }
@@ -1724,57 +1724,57 @@ input::placeholder {
 @keyframes maid-serving {
   0% {
     left: 8%;
-    top: 50%;
+    top: 44%;
   }
   45% {
     left: 40%;
-    top: 64%;
+    top: 46%;
   }
   100% {
     left: 72%;
-    top: 49%;
+    top: 43%;
   }
 }
 @keyframes executive-serving {
   0% {
     left: 73%;
-    top: 59%;
+    top: 45%;
   }
   50% {
     left: 43%;
-    top: 72%;
+    top: 46%;
   }
   100% {
     left: 14%;
-    top: 60%;
+    top: 45%;
   }
 }
 @keyframes maid-serving-phone {
   0% {
     left: 3%;
-    top: 48%;
+    top: 46%;
   }
   50% {
     left: 65%;
-    top: 60%;
+    top: 58%;
   }
   100% {
     left: 7%;
-    top: 73%;
+    top: 62%;
   }
 }
 @keyframes executive-serving-phone {
   0% {
     left: 68%;
-    top: 68%;
+    top: 58%;
   }
   50% {
     left: 8%;
-    top: 79%;
+    top: 62%;
   }
   100% {
     left: 66%;
-    top: 86%;
+    top: 63%;
   }
 }
 @keyframes gift-board-in {
