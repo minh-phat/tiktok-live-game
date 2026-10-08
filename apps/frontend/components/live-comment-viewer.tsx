@@ -428,7 +428,7 @@ function RoomScreen({ room, onBack }: { room: Room; onBack: () => void }) {
         <button type="button" className="danger-button" disabled={kidnapping.phase !== 'idle' || guests.length < 2} onClick={startKidnapping}>🚐 Bắt cóc ngay</button>
       </section>}
       <div className={`room-layout ${viewMode}-view`}>
-        <div className="scene-column"><div className="stream-stage" ref={stageRef}><Scene theme={room.theme} guests={guests} comments={comments} gifts={gifts} viewMode={viewMode} isRaining={isRaining} kidnapping={kidnapping} /></div><div className="scene-footer"><span><i className="status-dot" />{status.message}</span><span>{room.platform === 'youtube' ? 'YouTube LIVE' : `${viewers === null ? '—' : viewers.toLocaleString('vi-VN')} người xem TikTok`} · {guests.length} khách trong quán</span><button type="button" className="fullscreen-button" onClick={openFullscreen}>⛶ Toàn màn hình</button></div></div>
+        <div className="scene-column"><div className="stream-stage" ref={stageRef}><Scene theme={room.theme} guests={guests} comments={comments} gifts={gifts} viewMode={viewMode} isRaining={isRaining} kidnapping={kidnapping} showYouTubeJoinNotice={room.platform === 'youtube'} /></div><div className="scene-footer"><span><i className="status-dot" />{status.message}</span><span>{room.platform === 'youtube' ? 'YouTube LIVE' : `${viewers === null ? '—' : viewers.toLocaleString('vi-VN')} người xem TikTok`} · {guests.length} khách trong quán</span><button type="button" className="fullscreen-button" onClick={openFullscreen}>⛶ Toàn màn hình</button></div></div>
         <aside className="chat-panel"><div className="chat-head"><div><span className="eyebrow">CUỘC TRÒ CHUYỆN</span><h2>Bình luận LIVE</h2></div><span className="chat-count">{comments.length}</span></div><div className="chat-list">{comments.length ? comments.map((comment) => <div className="chat-line" key={comment.id}><Avatar avatar={comment.avatar} name={comment.nickname} /><div><div className="chat-meta"><strong>{comment.nickname}</strong><time>{new Date(comment.timestamp).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}</time></div><p>{comment.comment}</p></div></div>) : <div className="chat-empty"><span>💬</span><strong>Chưa có lời nhắn</strong><p>Khi có bình luận, bong bóng chat sẽ hiện trên nhân vật trong quán.</p></div>}</div><div className="chat-foot">Tin nhắn được lấy trực tiếp từ {room.platform === 'youtube' ? 'YouTube' : 'TikTok'} LIVE</div></aside>
       </div>
     </main>
@@ -599,7 +599,7 @@ const staffDialogues = [
   { speaker: 'executive', name: 'Minh', message: 'Cà phê đen ít đường của anh đây. Chúc anh ngon miệng.' },
 ] as const;
 
-function Scene({ theme, guests, comments, gifts, viewMode, isRaining, kidnapping }: { theme: Theme; guests: Guest[]; comments: Comment[]; gifts: Gift[]; viewMode: ViewMode; isRaining: boolean; kidnapping: KidnappingEvent }) {
+function Scene({ theme, guests, comments, gifts, viewMode, isRaining, kidnapping, showYouTubeJoinNotice }: { theme: Theme; guests: Guest[]; comments: Comment[]; gifts: Gift[]; viewMode: ViewMode; isRaining: boolean; kidnapping: KidnappingEvent; showYouTubeJoinNotice: boolean }) {
   const [now, setNow] = useState(Date.now());
   useEffect(() => { const timer = window.setInterval(() => setNow(Date.now()), 500); return () => clearInterval(timer); }, []);
   const dialogue = staffDialogues[Math.floor(now / 6000) % staffDialogues.length];
@@ -611,6 +611,7 @@ function Scene({ theme, guests, comments, gifts, viewMode, isRaining, kidnapping
   const hiddenHostages = kidnapping.phase === 'rescue' || kidnapping.phase === 'abducted';
   const secondsLeft = kidnapping.deadline ? Math.max(0, Math.ceil((kidnapping.deadline - now) / 1000)) : 0;
   return <div className={`scene ${theme} scene-${viewMode} crowd-${crowdDensity}`}>
+    {showYouTubeJoinNotice && <div className="youtube-join-notice"><span aria-hidden="true">💬</span> bình luận bất kỳ để vào quán</div>}
     <div className="scene-sky"><span className="moon" /><span className="star star-one">✦</span><span className="star star-two">✧</span><span className="star star-three">✦</span></div>
     <div className="shop-front"><div className="shop-roof" /><div className="shop-sign">{theme === 'sidewalk-cafe' ? 'CÀ PHÊ · GÓC PHỐ' : 'PHÒNG TRÀ · ĐÊM NAY'}</div><div className="shop-awning" /><div className="shop-window"><span>☕</span></div><div className="shop-door"><div className="door-glow" /></div><div className="shop-window second"><span>{theme === 'sidewalk-cafe' ? '✳' : '♫'}</span></div></div>
     <div className="scene-lamps"><div className="lamp left" /><div className="lamp right" /></div>

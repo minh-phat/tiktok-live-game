@@ -695,6 +695,26 @@ input::placeholder {
 .stream-stage {
   position: relative;
 }
+.youtube-join-notice {
+  position: absolute;
+  z-index: 50;
+  top: 2.5%;
+  right: 2.5%;
+  max-width: 95%;
+  padding: 0.6em 0.85em;
+  border: 1px solid #e9c58b80;
+  border-radius: 0.75em;
+  background: #171916e6;
+  color: #fff3dc;
+  font-size: 1.6cqw;
+  font-weight: 700;
+  line-height: 1.5;
+  box-shadow: 0 4px 16px #0003;
+  pointer-events: none;
+}
+.scene-phone .youtube-join-notice {
+  font-size: 3cqw;
+}
 .stream-hud {
   position: absolute;
   z-index: 12;
@@ -940,6 +960,7 @@ input::placeholder {
 }
 .scene {
   position: relative;
+  container-type: inline-size;
   isolation: isolate;
   height: min(58vw, 650px);
   min-height: 450px;
