@@ -192,6 +192,7 @@ function RoomScreen({ room, onBack }: { room: Room; onBack: () => void }) {
   const [error, setError] = useState('');
   const [viewMode, setViewMode] = useState<ViewMode>('desktop');
   const [virtualGuestsEnabled, setVirtualGuestsEnabled] = useState(true);
+  const [seatSpacing, setSeatSpacing] = useState(100);
   const [rainSettings, setRainSettings] = useState<RainSettings>({ automatic: true, maxDelayMinutes: 3, durationSeconds: 45 });
   const [isRaining, setIsRaining] = useState(false);
   const [kidnappingSettings, setKidnappingSettings] = useState<KidnappingSettings>({ automatic: true, maxDelayMinutes: 5 });
@@ -262,6 +263,11 @@ function RoomScreen({ room, onBack }: { room: Room; onBack: () => void }) {
   useEffect(() => {
     const savedMode = window.localStorage.getItem('live-room-view-mode');
     if (savedMode === 'desktop' || savedMode === 'phone') setViewMode(savedMode);
+    try {
+      const savedSpacing = window.localStorage.getItem(`live-room-seat-spacing-${room.id}`);
+      const spacing = savedSpacing === null ? 100 : Number(savedSpacing);
+      if (Number.isFinite(spacing)) setSeatSpacing(Math.min(100, Math.max(40, spacing)));
+    } catch { /* dùng khoảng cách mặc định nếu trình duyệt chặn lưu trữ */ }
     const savedRain = window.localStorage.getItem(`live-room-rain-${room.id}`);
     if (savedRain) {
       try { setRainSettings((current) => ({ ...current, ...JSON.parse(savedRain) })); } catch { /* dùng cấu hình mặc định */ }
@@ -404,6 +410,12 @@ function RoomScreen({ room, onBack }: { room: Room; onBack: () => void }) {
     window.localStorage.setItem('live-room-view-mode', mode);
   }
 
+  function changeSeatSpacing(spacing: number) {
+    setSeatSpacing(spacing);
+    try { window.localStorage.setItem(`live-room-seat-spacing-${room.id}`, String(spacing)); }
+    catch { /* vẫn áp dụng khoảng cách cho phiên hiện tại */ }
+  }
+
   async function openFullscreen() {
     if (!stageRef.current) return;
     if (document.fullscreenElement) await document.exitFullscreen();
@@ -415,6 +427,15 @@ function RoomScreen({ room, onBack }: { room: Room; onBack: () => void }) {
       <div className="room-titlebar"><div><button className="back-button" onClick={onBack}>← Tất cả phòng</button><span className="eyebrow">{room.theme === 'sidewalk-cafe' ? 'CÀ PHÊ VỈA HÈ' : 'PHÒNG TRÀ'} / {room.platform === 'youtube' ? `YouTube · ${room.youtubeLiveId}` : `TikTok · @${room.tiktokUsername}`}</span><h1>{room.name}</h1></div><div className="room-actions"><div className="view-mode-switch" role="group" aria-label="Chế độ hiển thị"><button type="button" className={viewMode === 'phone' ? 'active' : ''} onClick={() => changeViewMode('phone')} aria-pressed={viewMode === 'phone'}>▯ Điện thoại</button><button type="button" className={viewMode === 'desktop' ? 'active' : ''} onClick={() => changeViewMode('desktop')} aria-pressed={viewMode === 'desktop'}>▭ Desktop</button></div><div className="room-controls"><span className={`live-pill ${status.state}`}><span />{status.state === 'connected' ? 'ĐANG LIVE' : status.state === 'connecting' ? 'ĐANG KẾT NỐI' : 'CHƯA LIVE'}</span>{status.state === 'connected' ? <button className="secondary-button" onClick={disconnect}>Ngắt kết nối</button> : <button className="primary-button" disabled={status.state === 'connecting'} onClick={reconnect}>Kết nối lại</button>}</div></div></div>
       {error && <p className="notice error" role="alert">{error}</p>}
       <AudioManager room={room} onError={setError} />
+      <section className="weather-controls" aria-label="Bố trí chỗ ngồi">
+        <div className="weather-heading"><span className="weather-icon" aria-hidden="true">🪑</span><div><span className="eyebrow">CHỖ NGỒI</span><strong>Điều chỉnh khoảng cách giữa các khách</strong></div></div>
+        <label className="seat-spacing-control" htmlFor="seat-spacing">Khoảng cách
+          <input id="seat-spacing" type="range" min="40" max="100" step="5" value={seatSpacing} onChange={(event) => changeSeatSpacing(Number(event.target.value))} aria-valuetext={`${seatSpacing}% khoảng cách ban đầu`} />
+          <output htmlFor="seat-spacing">{seatSpacing}%</output>
+          <span className="muted">Kéo sang trái để ngồi gần hơn</span>
+        </label>
+        <button type="button" className="secondary-button" onClick={() => changeSeatSpacing(100)}>Mặc định</button>
+      </section>
       <section className="weather-controls" aria-label="Khách ảo trong quán">
         <div className="weather-heading"><span className="weather-icon" aria-hidden="true">☕</span><div><span className="eyebrow">KHÁCH ẢO</span><strong>10 khách trò chuyện tự động trong quán</strong></div></div>
         <label className="weather-toggle"><input type="checkbox" checked={virtualGuestsEnabled} onChange={(event) => setVirtualGuestsEnabled(event.target.checked)} /><span /> Bật khách ảo</label>
@@ -433,7 +454,7 @@ function RoomScreen({ room, onBack }: { room: Room; onBack: () => void }) {
         <button type="button" className="danger-button" disabled={kidnapping.phase !== 'idle' || guests.length < 2} onClick={startKidnapping}>🚐 Bắt cóc ngay</button>
       </section>}
       <div className={`room-layout ${viewMode}-view`}>
-        <div className="scene-column"><div className="stream-stage" ref={stageRef}><Scene theme={room.theme} guests={guests} comments={comments} gifts={gifts} viewMode={viewMode} isRaining={isRaining} kidnapping={kidnapping} showYouTubeJoinNotice={room.platform === 'youtube'} virtualGuestsEnabled={virtualGuestsEnabled} /></div><div className="scene-footer"><span><i className="status-dot" />{status.message}</span><span>{room.platform === 'youtube' ? 'YouTube LIVE' : `${viewers === null ? '—' : viewers.toLocaleString('vi-VN')} người xem TikTok`} · {guests.length} khách LIVE{virtualGuestsEnabled ? ' · 10 khách ảo' : ''}</span><button type="button" className="fullscreen-button" onClick={openFullscreen}>⛶ Toàn màn hình</button></div></div>
+        <div className="scene-column"><div className="stream-stage" ref={stageRef}><Scene theme={room.theme} guests={guests} comments={comments} gifts={gifts} viewMode={viewMode} isRaining={isRaining} kidnapping={kidnapping} showYouTubeJoinNotice={room.platform === 'youtube'} virtualGuestsEnabled={virtualGuestsEnabled} seatSpacing={seatSpacing} /></div><div className="scene-footer"><span><i className="status-dot" />{status.message}</span><span>{room.platform === 'youtube' ? 'YouTube LIVE' : `${viewers === null ? '—' : viewers.toLocaleString('vi-VN')} người xem TikTok`} · {guests.length} khách LIVE{virtualGuestsEnabled ? ' · 10 khách ảo' : ''}</span><button type="button" className="fullscreen-button" onClick={openFullscreen}>⛶ Toàn màn hình</button></div></div>
         <aside className="chat-panel"><div className="chat-head"><div><span className="eyebrow">CUỘC TRÒ CHUYỆN</span><h2>Bình luận LIVE</h2></div><span className="chat-count">{comments.length}</span></div><div className="chat-list">{comments.length ? comments.map((comment) => <div className="chat-line" key={comment.id}><Avatar avatar={comment.avatar} name={comment.nickname} /><div><div className="chat-meta"><strong>{comment.nickname}</strong><time>{new Date(comment.timestamp).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}</time></div><p>{comment.comment}</p></div></div>) : <div className="chat-empty"><span>💬</span><strong>Chưa có lời nhắn</strong><p>Khi có bình luận, bong bóng chat sẽ hiện trên nhân vật trong quán.</p></div>}</div><div className="chat-foot">Tin nhắn được lấy trực tiếp từ {room.platform === 'youtube' ? 'YouTube' : 'TikTok'} LIVE</div></aside>
       </div>
     </main>
@@ -534,7 +555,7 @@ function Avatar({ avatar, name }: { avatar: string; name: string }) {
 
 const MAX_SCENE_GUESTS = 200;
 
-function getSeatPosition(seat: number, viewMode: ViewMode) {
+function getSeatPosition(seat: number, viewMode: ViewMode, seatSpacing: number) {
   const columns = viewMode === 'phone' ? 10 : 20;
   const rows = MAX_SCENE_GUESTS / columns;
   const slot = ((seat % MAX_SCENE_GUESTS) * 73 + 19) % MAX_SCENE_GUESTS;
@@ -546,9 +567,12 @@ function getSeatPosition(seat: number, viewMode: ViewMode) {
   // extends ~12% below its center; on mobile it extends ~5.5% below.
   const topMin = viewMode === 'phone' ? 48 : 54;
   const topMax = viewMode === 'phone' ? 79 : 70;
+  // Compress seat coordinates around the seating area's center, preserving
+  // character size, seat order, and the original safe bounds in both views.
+  const scale = seatSpacing / 100;
   return {
-    left: leftMin + ((column + 0.5) / columns) * (leftMax - leftMin),
-    top: topMin + ((row + 0.5) / rows) * (topMax - topMin),
+    left: (leftMin + leftMax) / 2 + ((column + 0.5) / columns - 0.5) * (leftMax - leftMin) * scale,
+    top: (topMin + topMax) / 2 + ((row + 0.5) / rows - 0.5) * (topMax - topMin) * scale,
     depth: row,
   };
 }
@@ -675,7 +699,7 @@ function useVirtualConversation(enabled: boolean) {
   return enabled ? comment : null;
 }
 
-function Scene({ theme, guests, comments, gifts, viewMode, isRaining, kidnapping, showYouTubeJoinNotice, virtualGuestsEnabled }: { theme: Theme; guests: Guest[]; comments: Comment[]; gifts: Gift[]; viewMode: ViewMode; isRaining: boolean; kidnapping: KidnappingEvent; showYouTubeJoinNotice: boolean; virtualGuestsEnabled: boolean }) {
+function Scene({ theme, guests, comments, gifts, viewMode, isRaining, kidnapping, showYouTubeJoinNotice, virtualGuestsEnabled, seatSpacing }: { theme: Theme; guests: Guest[]; comments: Comment[]; gifts: Gift[]; viewMode: ViewMode; isRaining: boolean; kidnapping: KidnappingEvent; showYouTubeJoinNotice: boolean; virtualGuestsEnabled: boolean; seatSpacing: number }) {
   const [now, setNow] = useState(Date.now());
   useEffect(() => { const timer = window.setInterval(() => setNow(Date.now()), 500); return () => clearInterval(timer); }, []);
   const dialogue = staffDialogues[Math.floor(now / 6000) % staffDialogues.length];
@@ -720,7 +744,7 @@ function Scene({ theme, guests, comments, gifts, viewMode, isRaining, kidnapping
       </div>
       <div className="kidnap-van" aria-hidden="true"><img src="/kidnapping/van.png" alt="" /></div>
       {(kidnapping.phase === 'rescue' || kidnapping.phase === 'abducted') && kidnapping.hostages.map((hostage, index) => {
-        const position = getSeatPosition(hostage.seat, viewMode);
+        const position = getSeatPosition(hostage.seat, viewMode, seatSpacing);
         const hostageStyle = getGuestStyle(hostage);
         return <div className={`kidnap-pursuit pursuit-${index + 1}`} key={hostage.id} style={{ '--target-left': `${position.left}%`, '--target-top': `${position.top}%`, '--pursuit-delay': `${index * 0.28}s` } as CSSProperties}>
           <div className="kidnapper-figure" aria-label={`Kẻ bắt cóc đang tiến tới ${hostage.nickname}`}><img className="kidnapper-pose pose-run" src="/kidnapping/kidnapper-run.png" alt="" /><img className="kidnapper-pose pose-grab" src="/kidnapping/kidnapper-grab.png" alt="" /><img className="kidnapper-pose pose-escort" src="/kidnapping/kidnapper-escort.png" alt="" /></div>
@@ -729,7 +753,7 @@ function Scene({ theme, guests, comments, gifts, viewMode, isRaining, kidnapping
       })}
     </div>}
     {sceneGuests.filter((guest) => !(hiddenHostages && hostageIds.has(guest.id))).map((guest) => {
-      const { left, top, depth } = getSeatPosition(guest.seat, viewMode);
+      const { left, top, depth } = getSeatPosition(guest.seat, viewMode, seatSpacing);
       const guestStyle = getGuestStyle(guest);
       return <div className={`scene-guest chair-${Math.floor(guest.seat) % 2}`} key={guest.id} style={{ left: `${left}%`, top: `${top}%`, width: guestSize.width, height: guestSize.height, zIndex: 5 + depth }} title={`@${guest.username}`}>
         <div className="guest-name"><Avatar avatar={guest.avatar} name={guest.nickname} /><span>{guest.nickname}</span></div>
@@ -750,7 +774,7 @@ function Scene({ theme, guests, comments, gifts, viewMode, isRaining, kidnapping
           ? (virtualComment?.guestId === guest.id ? virtualComment : null)
           : comments.find((comment) => comment.guestId === guest.id);
         if (!latest || now - latest.timestamp >= 7000) return null;
-        const { left, top } = getSeatPosition(guest.seat, viewMode);
+        const { left, top } = getSeatPosition(guest.seat, viewMode, seatSpacing);
         return <div className="scene-dialogue-guest" key={latest.id} style={{ left: `${left}%`, top: `${top}%`, width: guestSize.width, height: guestSize.height }}><div className="speech-bubble"><span className="speech-speaker"><strong>{latest.nickname}</strong>{!guest.isVirtual && <small>@{latest.username}</small>}</span><span className="speech-message">{latest.comment}</span></div></div>;
       })}
     </div>

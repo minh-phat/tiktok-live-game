@@ -566,6 +566,26 @@ input::placeholder {
   background: #131b1e;
   text-align: center;
 }
+.weather-controls > .seat-spacing-control {
+  flex-wrap: wrap;
+  max-width: 100%;
+}
+.seat-spacing-control input[type="range"] {
+  width: 150px;
+  max-width: 100%;
+  padding: 0;
+  accent-color: var(--gold);
+  cursor: pointer;
+}
+.seat-spacing-control output {
+  min-width: 4ch;
+  color: var(--gold);
+  font-variant-numeric: tabular-nums;
+}
+.seat-spacing-control .muted {
+  flex-basis: 100%;
+  white-space: normal;
+}
 .weather-toggle input {
   position: absolute;
   opacity: 0;
