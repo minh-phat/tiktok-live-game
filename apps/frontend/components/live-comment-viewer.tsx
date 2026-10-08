@@ -159,7 +159,7 @@ function Dashboard({ rooms, onOpen, onCreated }: { rooms: Room[]; onOpen: (room:
     <main className="dashboard">
       <section className="dashboard-intro"><span className="eyebrow">BẢNG ĐIỀU KHIỂN</span><h1>Mở quán, bật LIVE,<br /><em>mọi người sẽ ghé.</em></h1><p>Chọn không gian cho buổi phát và kết nối phiên TikTok hoặc YouTube đang LIVE.</p></section>
       <section className="create-panel">
-        <div className="section-heading"><div><span className="eyebrow">01 / KHÔNG GIAN</span><h2>Tạo phòng LIVE mới</h2></div><span className="step-badge">Tối đa 20 phòng</span></div>
+        <div className="section-heading"><div><span className="eyebrow">01 / KHÔNG GIAN</span><h2>Tạo phòng LIVE mới</h2></div><span className="step-badge">Không giới hạn số phòng</span></div>
         <form onSubmit={create}>
           <div className="theme-grid">
             {themeOptions.map((option) => <button key={option.id} type="button" className={`theme-card ${theme === option.id ? 'selected' : ''}`} onClick={() => { setTheme(option.id); setName(option.title); }}><span className="theme-icon">{option.icon}</span><strong>{option.title}</strong><small>{option.description}</small><span className="theme-check">{theme === option.id ? '✓' : ''}</span></button>)}

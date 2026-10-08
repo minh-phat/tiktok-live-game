@@ -29,7 +29,6 @@ export class RoomsService {
     if (theme !== 'sidewalk-cafe' && theme !== 'tea-room') throw new BadRequestException('Chủ đề phòng không hợp lệ.');
     if (platform === 'tiktok' && !tiktokUsername) throw new BadRequestException('Username TikTok không hợp lệ.');
     if (platform === 'youtube' && !liveId) throw new BadRequestException('Link hoặc video ID YouTube LIVE không hợp lệ. Hãy nhập link của phiên phát trực tiếp.');
-    if (await this.store.rooms.countDocuments({ ownerId }) >= 20) throw new BadRequestException('Mỗi tài khoản được tạo tối đa 20 phòng.');
     const room: LiveRoom = { id: randomUUID(), ownerId, name, theme, platform, tiktokUsername, ...(liveId ? { youtubeLiveId: liveId } : {}), createdAt: new Date().toISOString(), audio: { trackIds: [], orderMode: 'manual' } };
     await this.store.rooms.insertOne(room);
     return room;
