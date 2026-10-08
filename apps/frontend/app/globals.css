@@ -599,6 +599,65 @@ input::placeholder {
   border-color: #53676b;
   white-space: nowrap;
 }
+.kidnap-controls {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin: 0 0 17px;
+  padding: 12px 14px;
+  border: 1px solid #683d3d;
+  border-radius: 14px;
+  background: linear-gradient(110deg, #2b1919, #25201d);
+}
+.kidnap-control-copy {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-right: auto;
+}
+.kidnap-control-copy > div {
+  display: grid;
+  gap: 4px;
+}
+.kidnap-control-copy strong {
+  font-size: 12px;
+}
+.kidnap-controls > label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: #c9aaa5;
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.kidnap-controls input[type="number"] {
+  width: 64px;
+  padding: 7px 8px;
+  border-color: #64413f;
+  background: #1e1413;
+  text-align: center;
+}
+.kidnap-control-icon {
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  border: 1px solid #774949;
+  border-radius: 11px;
+  background: #391f1f;
+  font-size: 19px;
+}
+.danger-button {
+  padding: 9px 13px;
+  border: 1px solid #a84f49;
+  border-radius: 10px;
+  background: #792f2c;
+  color: #fff4eb;
+  font-size: 12px;
+  font-weight: 800;
+}
+.danger-button:hover:not(:disabled) { background: #963c36; }
 @keyframes weather-pulse {
   50% { box-shadow: 0 0 0 5px #6fa9b21c; }
 }
@@ -606,6 +665,9 @@ input::placeholder {
   .weather-heading {
     width: 100%;
     min-width: 0;
+  }
+  .kidnap-control-copy {
+    width: 100%;
   }
 }
 @media (max-width: 560px) {
@@ -617,6 +679,12 @@ input::placeholder {
   }
   .weather-button {
     flex: 1;
+  }
+  .kidnap-controls > label:not(.weather-toggle) {
+    flex: 1;
+  }
+  .kidnap-controls .danger-button {
+    flex: 1 1 100%;
   }
 }
 .scene-column {
@@ -932,6 +1000,97 @@ input::placeholder {
   );
 }
 
+.kidnapping-event {
+  position: absolute;
+  z-index: 45;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+.kidnap-alert {
+  position: absolute;
+  z-index: 5;
+  left: 50%;
+  top: 7%;
+  display: grid;
+  justify-items: center;
+  gap: 4px;
+  width: min(520px, 88%);
+  padding: 11px 16px;
+  border: 2px solid #ff665d;
+  border-radius: 13px;
+  background: #2b1111eb;
+  color: #fff;
+  text-align: center;
+  box-shadow: 0 10px 35px #000b, 0 0 28px #ff49394d;
+  transform: translateX(-50%);
+  animation: kidnap-alert-in .32s ease-out both;
+}
+.kidnap-alert strong { color: #ffb6a8; font-size: 14px; letter-spacing: .04em; }
+.kidnap-alert span { font-size: 11px; }
+.kidnap-alert b { color: #ffe06e; font-size: 13px; }
+.phase-saved .kidnap-alert { border-color: #62d79b; background: #102b20ed; }
+.phase-saved .kidnap-alert strong { color: #8cf0b7; }
+.kidnap-van {
+  position: absolute;
+  z-index: 2;
+  right: -5%;
+  bottom: 0;
+  width: 48%;
+  height: 42%;
+  filter: drop-shadow(0 12px 10px #000b);
+  animation: van-arrives 1.55s cubic-bezier(.16,.78,.2,1) both;
+}
+.kidnap-van img { width: 100%; height: 100%; object-fit: contain; }
+.kidnap-pursuit { position: absolute; z-index: 4; inset: 0; }
+.kidnapper-figure {
+  position: absolute;
+  z-index: 2;
+  left: 82%; top: 73%;
+  width: 15%; height: 36%;
+  filter: drop-shadow(0 6px 4px #000b);
+  animation: kidnapper-route 11.5s var(--pursuit-delay) cubic-bezier(.45,.05,.3,1) both;
+}
+.kidnapper-pose { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; opacity: 0; }
+.pose-run { animation: pose-run 11.5s var(--pursuit-delay) both; }
+.pose-grab { animation: pose-grab 11.5s var(--pursuit-delay) both; }
+.pose-escort { animation: pose-escort 11.5s var(--pursuit-delay) both; }
+.captured-guest {
+  position: absolute;
+  z-index: 1;
+  left: var(--target-left); top: var(--target-top);
+  width: 7%; height: 18%;
+  transform: translate(-50%, -50%);
+  filter: drop-shadow(0 6px 4px #0009);
+  animation: hostage-route 11.5s var(--pursuit-delay) cubic-bezier(.45,.05,.3,1) both;
+}
+.captured-guest > img { width: 100%; height: 100%; object-fit: contain; object-position: center bottom; }
+.captured-name { position: absolute; z-index: 3; left: 50%; bottom: 94%; display: flex; align-items: center; gap: 3px; max-width: 110px; padding: 2px 5px 2px 2px; border: 1px solid #ffb15c; border-radius: 99px; background: #351919e8; color: #fff; font-size: 8px; white-space: nowrap; transform: translateX(-50%); }
+.captured-name .mini-avatar { width: 15px; height: 15px; }
+.captured-name strong { overflow: hidden; text-overflow: ellipsis; }
+.phase-abducted .kidnap-van { animation: van-leaves 1.2s ease-in both; }
+.phase-abducted .kidnap-pursuit { display: none; }
+.phase-saved .kidnap-van { animation: van-leaves 1.25s .35s ease-in both; }
+@keyframes van-arrives { from { transform: translateX(145%); } 75% { transform: translateX(-3%); } }
+@keyframes van-leaves { to { transform: translateX(150%); } }
+@keyframes kidnapper-route {
+  0% { left: 82%; top: 73%; opacity: 0; transform: translate(-50%, -50%) scale(.8); }
+  8% { opacity: 1; }
+  34%, 48% { left: var(--target-left); top: var(--target-top); transform: translate(-50%, -50%) scale(1); }
+  88% { left: 82%; top: 73%; opacity: 1; transform: translate(-50%, -50%) scale(.86); }
+  100% { left: 82%; top: 73%; opacity: 0; transform: translate(-50%, -50%) scale(.7); }
+}
+@keyframes pose-run { 0%, 33% { opacity: 1; } 38%, 100% { opacity: 0; } }
+@keyframes pose-grab { 0%, 32% { opacity: 0; } 37%, 52% { opacity: 1; } 58%, 100% { opacity: 0; } }
+@keyframes pose-escort { 0%, 51% { opacity: 0; } 57%, 100% { opacity: 1; } }
+@keyframes hostage-route {
+  0%, 42% { left: var(--target-left); top: var(--target-top); transform: translate(-50%, -50%) rotate(0); }
+  52% { transform: translate(-50%, -50%) rotate(-7deg); }
+  88% { left: 82%; top: 73%; opacity: 1; transform: translate(-50%, -50%) rotate(7deg) scale(.8); }
+  100% { left: 82%; top: 73%; opacity: 0; transform: translate(-50%, -50%) scale(.6); }
+}
+@keyframes kidnap-alert-in { from { opacity: 0; transform: translate(-50%, -15px) scale(.94); } }
+
 .rain-weather,
 .rain-darkness,
 .rain-sheet,
@@ -1065,6 +1224,8 @@ input::placeholder {
   .weather-icon.raining {
     animation: none;
   }
+  .kidnap-alert, .kidnap-van, .kidnapper-figure, .captured-guest,
+  .kidnapper-pose { animation-duration: .01ms; animation-delay: 0s; }
 }
 
 .scene-phone .tarp {
@@ -1076,6 +1237,12 @@ input::placeholder {
 .scene-phone .tarp-pole { top: 41%; bottom: 7%; }
 .scene-phone .pole-left { left: 10%; }
 .scene-phone .pole-right { right: 10%; }
+.scene-phone .kidnap-alert { top: 3%; padding: 9px 10px; }
+.scene-phone .kidnap-alert strong { font-size: 11px; }
+.scene-phone .kidnap-alert span { font-size: 9px; }
+.scene-phone .kidnap-van { right: -8%; bottom: 2%; width: 72%; height: 23%; }
+.scene-phone .kidnapper-figure { width: 21%; height: 23%; }
+.scene-phone .captured-guest { width: 13%; height: 11%; }
 .sidewalk-cafe .scene-sky,
 .sidewalk-cafe .shop-front,
 .sidewalk-cafe .scene-lamps,

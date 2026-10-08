@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type FormEvent } from 'react';
 import { io, type Socket } from 'socket.io-client';
 
 type Theme = 'sidewalk-cafe' | 'tea-room';
@@ -16,6 +16,9 @@ type Gift = { id: string; guestId: string; username: string; nickname: string; a
 type Snapshot = { status: Status; guests: Guest[]; comments: Comment[]; gifts: Gift[]; viewers: number | null };
 type Reply<T = undefined> = { ok: boolean; message?: string; data?: T };
 type RainSettings = { automatic: boolean; maxDelayMinutes: number; durationSeconds: number };
+type KidnappingSettings = { automatic: boolean; maxDelayMinutes: number };
+type KidnappingPhase = 'idle' | 'arriving' | 'rescue' | 'saved' | 'abducted';
+type KidnappingEvent = { phase: KidnappingPhase; hostages: Guest[]; deadline: number | null; rescuer?: string };
 
 const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL ?? 'http://localhost:3001';
 const MAX_AUDIO_FILE_SIZE = 100 * 1024 * 1024;
@@ -184,10 +187,45 @@ function RoomScreen({ room, onBack }: { room: Room; onBack: () => void }) {
   const [viewMode, setViewMode] = useState<ViewMode>('desktop');
   const [rainSettings, setRainSettings] = useState<RainSettings>({ automatic: true, maxDelayMinutes: 3, durationSeconds: 45 });
   const [isRaining, setIsRaining] = useState(false);
+  const [kidnappingSettings, setKidnappingSettings] = useState<KidnappingSettings>({ automatic: true, maxDelayMinutes: 5 });
+  const [kidnapping, setKidnapping] = useState<KidnappingEvent>({ phase: 'idle', hostages: [], deadline: null });
   const stageRef = useRef<HTMLDivElement>(null);
   const nextRainTimer = useRef<number | null>(null);
   const rainEndTimer = useRef<number | null>(null);
   const rainSettingsSaveSkipped = useRef(false);
+  const kidnappingSettingsSaveSkipped = useRef(false);
+  const nextKidnappingTimer = useRef<number | null>(null);
+  const kidnappingTimers = useRef<number[]>([]);
+
+  const clearNextKidnapping = useCallback(() => {
+    if (nextKidnappingTimer.current !== null) window.clearTimeout(nextKidnappingTimer.current);
+    nextKidnappingTimer.current = null;
+  }, []);
+
+  const clearKidnappingTimers = useCallback(() => {
+    kidnappingTimers.current.forEach((timer) => window.clearTimeout(timer));
+    kidnappingTimers.current = [];
+  }, []);
+
+  const scheduleKidnappingTimer = useCallback((callback: () => void, delay: number) => {
+    const timer = window.setTimeout(callback, delay);
+    kidnappingTimers.current.push(timer);
+    return timer;
+  }, []);
+
+  const startKidnapping = useCallback(() => {
+    if (room.theme !== 'sidewalk-cafe' || guests.length < 2 || kidnapping.phase !== 'idle') return;
+    clearNextKidnapping();
+    clearKidnappingTimers();
+    const hostages = [...guests].sort(() => Math.random() - 0.5).slice(0, 2);
+    setKidnapping({ phase: 'arriving', hostages, deadline: null });
+    scheduleKidnappingTimer(() => {
+      setKidnapping({ phase: 'rescue', hostages, deadline: Date.now() + 20_000 });
+      scheduleKidnappingTimer(() => {
+        setKidnapping((current) => current.phase === 'rescue' ? { ...current, phase: 'abducted', deadline: null } : current);
+      }, 20_000);
+    }, 2_400);
+  }, [clearKidnappingTimers, clearNextKidnapping, guests, kidnapping.phase, room.theme, scheduleKidnappingTimer]);
 
   const clearRainTimers = useCallback(() => {
     if (nextRainTimer.current !== null) window.clearTimeout(nextRainTimer.current);
@@ -221,6 +259,10 @@ function RoomScreen({ room, onBack }: { room: Room; onBack: () => void }) {
     if (savedRain) {
       try { setRainSettings((current) => ({ ...current, ...JSON.parse(savedRain) })); } catch { /* dùng cấu hình mặc định */ }
     }
+    const savedKidnapping = window.localStorage.getItem(`live-room-kidnapping-${room.id}`);
+    if (savedKidnapping) {
+      try { setKidnappingSettings((current) => ({ ...current, ...JSON.parse(savedKidnapping) })); } catch { /* dùng cấu hình mặc định */ }
+    }
   }, []);
 
   useEffect(() => {
@@ -233,6 +275,15 @@ function RoomScreen({ room, onBack }: { room: Room; onBack: () => void }) {
   }, [rainSettings, room.id, room.theme]);
 
   useEffect(() => {
+    if (!kidnappingSettingsSaveSkipped.current) {
+      kidnappingSettingsSaveSkipped.current = true;
+      return;
+    }
+    if (room.theme !== 'sidewalk-cafe') return;
+    window.localStorage.setItem(`live-room-kidnapping-${room.id}`, JSON.stringify(kidnappingSettings));
+  }, [kidnappingSettings, room.id, room.theme]);
+
+  useEffect(() => {
     clearNextRain();
     if (room.theme !== 'sidewalk-cafe' || !rainSettings.automatic || isRaining) return clearNextRain;
     const maximum = rainSettings.maxDelayMinutes * 60 * 1000;
@@ -242,7 +293,58 @@ function RoomScreen({ room, onBack }: { room: Room; onBack: () => void }) {
     return clearNextRain;
   }, [clearNextRain, isRaining, rainSettings.automatic, rainSettings.maxDelayMinutes, room.theme, startRain]);
 
+  useEffect(() => {
+    clearNextKidnapping();
+    if (room.theme !== 'sidewalk-cafe' || !kidnappingSettings.automatic || kidnapping.phase !== 'idle' || guests.length < 2) return clearNextKidnapping;
+    const maximum = kidnappingSettings.maxDelayMinutes * 60 * 1000;
+    const minimum = Math.min(15_000, maximum);
+    const delay = minimum + Math.random() * Math.max(0, maximum - minimum);
+    nextKidnappingTimer.current = window.setTimeout(() => {
+      nextKidnappingTimer.current = null;
+      startKidnapping();
+    }, delay);
+    return clearNextKidnapping;
+  }, [clearNextKidnapping, guests.length, kidnapping.phase, kidnappingSettings.automatic, kidnappingSettings.maxDelayMinutes, room.theme, startKidnapping]);
+
   useEffect(() => clearRainTimers, [clearRainTimers]);
+  useEffect(() => () => {
+    clearNextKidnapping();
+    clearKidnappingTimers();
+  }, [clearKidnappingTimers, clearNextKidnapping]);
+
+  useEffect(() => {
+    if (kidnapping.phase !== 'abducted') return;
+    const timer = scheduleKidnappingTimer(() => {
+      const returnedAt = Date.now();
+      const returnComments = kidnapping.hostages.map((hostage, index): Comment => ({
+        id: `kidnap-return-${hostage.id}-${returnedAt}`,
+        guestId: hostage.id,
+        username: hostage.username,
+        nickname: hostage.nickname,
+        avatar: hostage.avatar,
+        comment: 'tại sao mọi người không cứu tôi',
+        timestamp: returnedAt + index,
+      }));
+      setComments((current) => [...returnComments, ...current].slice(0, 100));
+      setKidnapping({ phase: 'idle', hostages: [], deadline: null });
+    }, 5_000);
+    return () => window.clearTimeout(timer);
+  }, [kidnapping.phase, kidnapping.hostages, scheduleKidnappingTimer]);
+
+  useEffect(() => {
+    if (kidnapping.phase !== 'rescue' || comments.length === 0) return;
+    if (!kidnapping.deadline) return;
+    const rescueWindowStart = kidnapping.deadline - 20_000;
+    const rescueComment = comments.find((comment) => {
+      if (comment.timestamp < rescueWindowStart || comment.timestamp > kidnapping.deadline!) return false;
+      const normalized = comment.comment.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+      return normalized.split(/[^a-z0-9]+/).includes('giup');
+    });
+    if (!rescueComment) return;
+    clearKidnappingTimers();
+    setKidnapping((current) => ({ ...current, phase: 'saved', deadline: null, rescuer: rescueComment.nickname }));
+    scheduleKidnappingTimer(() => setKidnapping({ phase: 'idle', hostages: [], deadline: null }), 3_800);
+  }, [clearKidnappingTimers, comments, kidnapping.deadline, kidnapping.phase, scheduleKidnappingTimer]);
 
   useEffect(() => {
     const connection = io(backendUrl, { withCredentials: true });
@@ -267,11 +369,19 @@ function RoomScreen({ room, onBack }: { room: Room; onBack: () => void }) {
     connection.on('live:comment', (comment: Comment) => setComments((current) => [comment, ...current].slice(0, 100)));
     connection.on('live:gift', (gift: Gift) => setGifts((current) => [gift, ...current].slice(0, 20)));
     connection.on('live:stats', ({ viewers: count }: { viewers: number | null }) => setViewers(count));
-    connection.on('live:reset', () => { setGuests([]); setComments([]); setGifts([]); setViewers(null); });
+    connection.on('live:reset', () => {
+      clearNextKidnapping();
+      clearKidnappingTimers();
+      setKidnapping({ phase: 'idle', hostages: [], deadline: null });
+      setGuests([]);
+      setComments([]);
+      setGifts([]);
+      setViewers(null);
+    });
     connection.on('connect_error', () => setError('Không thể kết nối backend.'));
     setSocket(connection);
     return () => { connection.emit('room:leave', { roomId: room.id }); connection.disconnect(); };
-  }, [room.id]);
+  }, [clearKidnappingTimers, clearNextKidnapping, room.id]);
 
   function reconnect() {
     setError('');
@@ -305,8 +415,14 @@ function RoomScreen({ room, onBack }: { room: Room; onBack: () => void }) {
         <label>Kéo dài <input type="number" min="10" max="300" step="5" value={rainSettings.durationSeconds} onChange={(event) => setRainSettings((current) => ({ ...current, durationSeconds: Math.min(300, Math.max(10, Number(event.target.value) || 45)) }))} /> giây</label>
         <button type="button" className="secondary-button weather-button" onClick={() => isRaining ? stopRain() : startRain()}>{isRaining ? 'Tạnh mưa' : 'Cho mưa ngay'}</button>
       </section>}
+      {room.theme === 'sidewalk-cafe' && <section className="kidnap-controls" aria-label="Điều khiển sự kiện bắt cóc">
+        <div className="kidnap-control-copy"><span className="kidnap-control-icon">🚨</span><div><span className="eyebrow">SỰ KIỆN QUÁN</span><strong>{kidnapping.phase === 'idle' ? (guests.length < 2 ? 'Cần ít nhất 2 khách để bắt đầu' : 'Bắt cóc 2 khách ngẫu nhiên') : 'Sự kiện bắt cóc đang diễn ra'}</strong></div></div>
+        <label className="weather-toggle"><input type="checkbox" checked={kidnappingSettings.automatic} onChange={(event) => setKidnappingSettings((current) => ({ ...current, automatic: event.target.checked }))} /><span /> Tự động</label>
+        <label>Tối đa <input type="number" min="0.25" max="30" step="0.25" value={kidnappingSettings.maxDelayMinutes} onChange={(event) => setKidnappingSettings((current) => ({ ...current, maxDelayMinutes: Math.min(30, Math.max(0.25, Number(event.target.value) || 5)) }))} /> phút</label>
+        <button type="button" className="danger-button" disabled={kidnapping.phase !== 'idle' || guests.length < 2} onClick={startKidnapping}>🚐 Bắt cóc ngay</button>
+      </section>}
       <div className={`room-layout ${viewMode}-view`}>
-        <div className="scene-column"><div className="stream-stage" ref={stageRef}><Scene theme={room.theme} guests={guests} comments={comments} gifts={gifts} viewMode={viewMode} isRaining={isRaining} /></div><div className="scene-footer"><span><i className="status-dot" />{status.message}</span><span>{viewers === null ? '—' : viewers.toLocaleString('vi-VN')} người xem TikTok · {guests.length} khách trong quán</span><button type="button" className="fullscreen-button" onClick={openFullscreen}>⛶ Toàn màn hình</button></div></div>
+        <div className="scene-column"><div className="stream-stage" ref={stageRef}><Scene theme={room.theme} guests={guests} comments={comments} gifts={gifts} viewMode={viewMode} isRaining={isRaining} kidnapping={kidnapping} /></div><div className="scene-footer"><span><i className="status-dot" />{status.message}</span><span>{viewers === null ? '—' : viewers.toLocaleString('vi-VN')} người xem TikTok · {guests.length} khách trong quán</span><button type="button" className="fullscreen-button" onClick={openFullscreen}>⛶ Toàn màn hình</button></div></div>
         <aside className="chat-panel"><div className="chat-head"><div><span className="eyebrow">CUỘC TRÒ CHUYỆN</span><h2>Bình luận LIVE</h2></div><span className="chat-count">{comments.length}</span></div><div className="chat-list">{comments.length ? comments.map((comment) => <div className="chat-line" key={comment.id}><Avatar avatar={comment.avatar} name={comment.nickname} /><div><div className="chat-meta"><strong>{comment.nickname}</strong><time>{new Date(comment.timestamp).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}</time></div><p>{comment.comment}</p></div></div>) : <div className="chat-empty"><span>💬</span><strong>Chưa có lời nhắn</strong><p>Khi có bình luận, bong bóng chat sẽ hiện trên nhân vật trong quán.</p></div>}</div><div className="chat-foot">Tin nhắn được lấy trực tiếp từ TikTok LIVE</div></aside>
       </div>
     </main>
@@ -477,7 +593,7 @@ const staffDialogues = [
   { speaker: 'executive', name: 'Minh', message: 'Cà phê đen ít đường của anh đây. Chúc anh ngon miệng.' },
 ] as const;
 
-function Scene({ theme, guests, comments, gifts, viewMode, isRaining }: { theme: Theme; guests: Guest[]; comments: Comment[]; gifts: Gift[]; viewMode: ViewMode; isRaining: boolean }) {
+function Scene({ theme, guests, comments, gifts, viewMode, isRaining, kidnapping }: { theme: Theme; guests: Guest[]; comments: Comment[]; gifts: Gift[]; viewMode: ViewMode; isRaining: boolean; kidnapping: KidnappingEvent }) {
   const [now, setNow] = useState(Date.now());
   useEffect(() => { const timer = window.setInterval(() => setNow(Date.now()), 500); return () => clearInterval(timer); }, []);
   const dialogue = staffDialogues[Math.floor(now / 6000) % staffDialogues.length];
@@ -485,6 +601,9 @@ function Scene({ theme, guests, comments, gifts, viewMode, isRaining }: { theme:
   const crowdDensity = getCrowdDensity(guests.length);
   const guestSize = getGuestSize(viewMode);
   const latestGift = gifts.find((gift) => now - gift.timestamp < 12000);
+  const hostageIds = new Set(kidnapping.hostages.map((hostage) => hostage.id));
+  const hiddenHostages = kidnapping.phase === 'rescue' || kidnapping.phase === 'abducted';
+  const secondsLeft = kidnapping.deadline ? Math.max(0, Math.ceil((kidnapping.deadline - now) / 1000)) : 0;
   return <div className={`scene ${theme} scene-${viewMode} crowd-${crowdDensity}`}>
     <div className="scene-sky"><span className="moon" /><span className="star star-one">✦</span><span className="star star-two">✧</span><span className="star star-three">✦</span></div>
     <div className="shop-front"><div className="shop-roof" /><div className="shop-sign">{theme === 'sidewalk-cafe' ? 'CÀ PHÊ · GÓC PHỐ' : 'PHÒNG TRÀ · ĐÊM NAY'}</div><div className="shop-awning" /><div className="shop-window"><span>☕</span></div><div className="shop-door"><div className="door-glow" /></div><div className="shop-window second"><span>{theme === 'sidewalk-cafe' ? '✳' : '♫'}</span></div></div>
@@ -507,7 +626,24 @@ function Scene({ theme, guests, comments, gifts, viewMode, isRaining }: { theme:
       <div className="staff-member staff-maid"><img src="/characters/maid-server-v2.png" alt="Lan đang phục vụ cà phê" /></div>
       <div className="staff-member staff-executive"><img src="/characters/executive-server-v2.png" alt="Minh đang phục vụ cà phê" /></div>
     </div>}
-    {guests.map((guest) => {
+    {theme === 'sidewalk-cafe' && kidnapping.phase !== 'idle' && <div className={`kidnapping-event phase-${kidnapping.phase}`}>
+      <div className="kidnap-alert" role="status" aria-live="assertive">
+        {kidnapping.phase === 'arriving' && <><strong>🚨 XE LẠ ĐANG TIẾN VÀO QUÁN!</strong><span>Hai kẻ bịt mặt đang xuống xe…</span></>}
+        {kidnapping.phase === 'rescue' && <><strong>🆘 GIẢI CỨU CON TIN · {secondsLeft}s</strong><span>Bình luận chữ <b>“giup”</b> để cứu {kidnapping.hostages.map((guest) => guest.nickname).join(' và ')}</span></>}
+        {kidnapping.phase === 'saved' && <><strong>✅ CON TIN ĐÃ ĐƯỢC GIẢI CỨU!</strong><span>Cảm ơn {kidnapping.rescuer} đã lên tiếng kịp thời.</span></>}
+        {kidnapping.phase === 'abducted' && <><strong>🚐 CON TIN ĐÃ BỊ ĐƯA ĐI!</strong><span>Không ai giải cứu kịp… họ sẽ quay lại sau 5 giây.</span></>}
+      </div>
+      <div className="kidnap-van" aria-hidden="true"><img src="/kidnapping/van.png" alt="" /></div>
+      {(kidnapping.phase === 'rescue' || kidnapping.phase === 'abducted') && kidnapping.hostages.map((hostage, index) => {
+        const position = getSeatPosition(hostage.seat, viewMode);
+        const hostageStyle = getGuestStyle(hostage);
+        return <div className={`kidnap-pursuit pursuit-${index + 1}`} key={hostage.id} style={{ '--target-left': `${position.left}%`, '--target-top': `${position.top}%`, '--pursuit-delay': `${index * 0.28}s` } as CSSProperties}>
+          <div className="kidnapper-figure" aria-label={`Kẻ bắt cóc đang tiến tới ${hostage.nickname}`}><img className="kidnapper-pose pose-run" src="/kidnapping/kidnapper-run.png" alt="" /><img className="kidnapper-pose pose-grab" src="/kidnapping/kidnapper-grab.png" alt="" /><img className="kidnapper-pose pose-escort" src="/kidnapping/kidnapper-escort.png" alt="" /></div>
+          <div className="captured-guest"><div className="captured-name"><Avatar avatar={hostage.avatar} name={hostage.nickname} /><strong>{hostage.nickname}</strong></div><img src={hostageStyle.src} alt={`${hostage.nickname} bị bắt cóc`} /></div>
+        </div>;
+      })}
+    </div>}
+    {guests.filter((guest) => !(hiddenHostages && hostageIds.has(guest.id))).map((guest) => {
       const { left, top, depth } = getSeatPosition(guest.seat, viewMode);
       const guestStyle = getGuestStyle(guest);
       return <div className={`scene-guest chair-${guest.seat % 2}`} key={guest.id} style={{ left: `${left}%`, top: `${top}%`, width: guestSize.width, height: guestSize.height, zIndex: 5 + depth }} title={`@${guest.username}`}>
