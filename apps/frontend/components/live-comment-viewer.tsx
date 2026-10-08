@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import { io, type Socket } from 'socket.io-client';
 
 type Theme = 'sidewalk-cafe' | 'tea-room';
@@ -15,6 +15,7 @@ type Comment = { id: string; guestId: string; username: string; nickname: string
 type Gift = { id: string; guestId: string; username: string; nickname: string; avatar: string; giftId: string; giftName: string; giftImage: string; count: number; diamonds: number; timestamp: number };
 type Snapshot = { status: Status; guests: Guest[]; comments: Comment[]; gifts: Gift[]; viewers: number | null };
 type Reply<T = undefined> = { ok: boolean; message?: string; data?: T };
+type RainSettings = { automatic: boolean; maxDelayMinutes: number; durationSeconds: number };
 
 const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL ?? 'http://localhost:3001';
 const MAX_AUDIO_FILE_SIZE = 100 * 1024 * 1024;
@@ -181,12 +182,67 @@ function RoomScreen({ room, onBack }: { room: Room; onBack: () => void }) {
   const [viewers, setViewers] = useState<number | null>(null);
   const [error, setError] = useState('');
   const [viewMode, setViewMode] = useState<ViewMode>('desktop');
+  const [rainSettings, setRainSettings] = useState<RainSettings>({ automatic: true, maxDelayMinutes: 3, durationSeconds: 45 });
+  const [isRaining, setIsRaining] = useState(false);
   const stageRef = useRef<HTMLDivElement>(null);
+  const nextRainTimer = useRef<number | null>(null);
+  const rainEndTimer = useRef<number | null>(null);
+  const rainSettingsSaveSkipped = useRef(false);
+
+  const clearRainTimers = useCallback(() => {
+    if (nextRainTimer.current !== null) window.clearTimeout(nextRainTimer.current);
+    if (rainEndTimer.current !== null) window.clearTimeout(rainEndTimer.current);
+    nextRainTimer.current = null;
+    rainEndTimer.current = null;
+  }, []);
+
+  const clearNextRain = useCallback(() => {
+    if (nextRainTimer.current !== null) window.clearTimeout(nextRainTimer.current);
+    nextRainTimer.current = null;
+  }, []);
+
+  const startRain = useCallback(() => {
+    if (nextRainTimer.current !== null) window.clearTimeout(nextRainTimer.current);
+    if (rainEndTimer.current !== null) window.clearTimeout(rainEndTimer.current);
+    setIsRaining(true);
+    rainEndTimer.current = window.setTimeout(() => setIsRaining(false), rainSettings.durationSeconds * 1000);
+  }, [rainSettings.durationSeconds]);
+
+  const stopRain = useCallback(() => {
+    if (rainEndTimer.current !== null) window.clearTimeout(rainEndTimer.current);
+    rainEndTimer.current = null;
+    setIsRaining(false);
+  }, []);
 
   useEffect(() => {
     const savedMode = window.localStorage.getItem('live-room-view-mode');
     if (savedMode === 'desktop' || savedMode === 'phone') setViewMode(savedMode);
+    const savedRain = window.localStorage.getItem(`live-room-rain-${room.id}`);
+    if (savedRain) {
+      try { setRainSettings((current) => ({ ...current, ...JSON.parse(savedRain) })); } catch { /* dùng cấu hình mặc định */ }
+    }
   }, []);
+
+  useEffect(() => {
+    if (!rainSettingsSaveSkipped.current) {
+      rainSettingsSaveSkipped.current = true;
+      return;
+    }
+    if (room.theme !== 'sidewalk-cafe') return;
+    window.localStorage.setItem(`live-room-rain-${room.id}`, JSON.stringify(rainSettings));
+  }, [rainSettings, room.id, room.theme]);
+
+  useEffect(() => {
+    clearNextRain();
+    if (room.theme !== 'sidewalk-cafe' || !rainSettings.automatic || isRaining) return clearNextRain;
+    const maximum = rainSettings.maxDelayMinutes * 60 * 1000;
+    const minimum = Math.min(15_000, maximum);
+    const delay = minimum + Math.random() * Math.max(0, maximum - minimum);
+    nextRainTimer.current = window.setTimeout(startRain, delay);
+    return clearNextRain;
+  }, [clearNextRain, isRaining, rainSettings.automatic, rainSettings.maxDelayMinutes, room.theme, startRain]);
+
+  useEffect(() => clearRainTimers, [clearRainTimers]);
 
   useEffect(() => {
     const connection = io(backendUrl, { withCredentials: true });
@@ -242,8 +298,15 @@ function RoomScreen({ room, onBack }: { room: Room; onBack: () => void }) {
       <div className="room-titlebar"><div><button className="back-button" onClick={onBack}>← Tất cả phòng</button><span className="eyebrow">{room.theme === 'sidewalk-cafe' ? 'CÀ PHÊ VỈA HÈ' : 'PHÒNG TRÀ'} / @{room.tiktokUsername}</span><h1>{room.name}</h1></div><div className="room-actions"><div className="view-mode-switch" role="group" aria-label="Chế độ hiển thị"><button type="button" className={viewMode === 'phone' ? 'active' : ''} onClick={() => changeViewMode('phone')} aria-pressed={viewMode === 'phone'}>▯ Điện thoại</button><button type="button" className={viewMode === 'desktop' ? 'active' : ''} onClick={() => changeViewMode('desktop')} aria-pressed={viewMode === 'desktop'}>▭ Desktop</button></div><div className="room-controls"><span className={`live-pill ${status.state}`}><span />{status.state === 'connected' ? 'ĐANG LIVE' : status.state === 'connecting' ? 'ĐANG KẾT NỐI' : 'CHƯA LIVE'}</span>{status.state === 'connected' ? <button className="secondary-button" onClick={disconnect}>Ngắt kết nối</button> : <button className="primary-button" disabled={status.state === 'connecting'} onClick={reconnect}>Kết nối lại</button>}</div></div></div>
       {error && <p className="notice error" role="alert">{error}</p>}
       <AudioManager room={room} onError={setError} />
+      {room.theme === 'sidewalk-cafe' && <section className="weather-controls" aria-label="Điều khiển thời tiết">
+        <div className="weather-heading"><span className={`weather-icon ${isRaining ? 'raining' : ''}`}>{isRaining ? '🌧' : '☁'}</span><div><span className="eyebrow">THỜI TIẾT QUÁN</span><strong>{isRaining ? 'Đang mưa · bạt đã được kéo ra' : rainSettings.automatic ? `Mưa ngẫu nhiên trong tối đa ${rainSettings.maxDelayMinutes} phút` : 'Mưa tự động đang tắt'}</strong></div></div>
+        <label className="weather-toggle"><input type="checkbox" checked={rainSettings.automatic} onChange={(event) => setRainSettings((current) => ({ ...current, automatic: event.target.checked }))} /><span /> Mưa tự động</label>
+        <label>Tối đa <input type="number" min="0.25" max="30" step="0.25" value={rainSettings.maxDelayMinutes} onChange={(event) => setRainSettings((current) => ({ ...current, maxDelayMinutes: Math.min(30, Math.max(0.25, Number(event.target.value) || 3)) }))} /> phút</label>
+        <label>Kéo dài <input type="number" min="10" max="300" step="5" value={rainSettings.durationSeconds} onChange={(event) => setRainSettings((current) => ({ ...current, durationSeconds: Math.min(300, Math.max(10, Number(event.target.value) || 45)) }))} /> giây</label>
+        <button type="button" className="secondary-button weather-button" onClick={() => isRaining ? stopRain() : startRain()}>{isRaining ? 'Tạnh mưa' : 'Cho mưa ngay'}</button>
+      </section>}
       <div className={`room-layout ${viewMode}-view`}>
-        <div className="scene-column"><div className="stream-stage" ref={stageRef}><Scene theme={room.theme} guests={guests} comments={comments} gifts={gifts} viewMode={viewMode} /></div><div className="scene-footer"><span><i className="status-dot" />{status.message}</span><span>{viewers === null ? '—' : viewers.toLocaleString('vi-VN')} người xem TikTok · {guests.length} khách trong quán</span><button type="button" className="fullscreen-button" onClick={openFullscreen}>⛶ Toàn màn hình</button></div></div>
+        <div className="scene-column"><div className="stream-stage" ref={stageRef}><Scene theme={room.theme} guests={guests} comments={comments} gifts={gifts} viewMode={viewMode} isRaining={isRaining} /></div><div className="scene-footer"><span><i className="status-dot" />{status.message}</span><span>{viewers === null ? '—' : viewers.toLocaleString('vi-VN')} người xem TikTok · {guests.length} khách trong quán</span><button type="button" className="fullscreen-button" onClick={openFullscreen}>⛶ Toàn màn hình</button></div></div>
         <aside className="chat-panel"><div className="chat-head"><div><span className="eyebrow">CUỘC TRÒ CHUYỆN</span><h2>Bình luận LIVE</h2></div><span className="chat-count">{comments.length}</span></div><div className="chat-list">{comments.length ? comments.map((comment) => <div className="chat-line" key={comment.id}><Avatar avatar={comment.avatar} name={comment.nickname} /><div><div className="chat-meta"><strong>{comment.nickname}</strong><time>{new Date(comment.timestamp).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}</time></div><p>{comment.comment}</p></div></div>) : <div className="chat-empty"><span>💬</span><strong>Chưa có lời nhắn</strong><p>Khi có bình luận, bong bóng chat sẽ hiện trên nhân vật trong quán.</p></div>}</div><div className="chat-foot">Tin nhắn được lấy trực tiếp từ TikTok LIVE</div></aside>
       </div>
     </main>
@@ -412,7 +475,7 @@ const staffDialogues = [
   { speaker: 'executive', name: 'Minh', message: 'Cà phê đen ít đường của anh đây. Chúc anh ngon miệng.' },
 ] as const;
 
-function Scene({ theme, guests, comments, gifts, viewMode }: { theme: Theme; guests: Guest[]; comments: Comment[]; gifts: Gift[]; viewMode: ViewMode }) {
+function Scene({ theme, guests, comments, gifts, viewMode, isRaining }: { theme: Theme; guests: Guest[]; comments: Comment[]; gifts: Gift[]; viewMode: ViewMode; isRaining: boolean }) {
   const [now, setNow] = useState(Date.now());
   useEffect(() => { const timer = window.setInterval(() => setNow(Date.now()), 500); return () => clearInterval(timer); }, []);
   const dialogue = staffDialogues[Math.floor(now / 6000) % staffDialogues.length];
@@ -425,6 +488,11 @@ function Scene({ theme, guests, comments, gifts, viewMode }: { theme: Theme; gue
     <div className="shop-front"><div className="shop-roof" /><div className="shop-sign">{theme === 'sidewalk-cafe' ? 'CÀ PHÊ · GÓC PHỐ' : 'PHÒNG TRÀ · ĐÊM NAY'}</div><div className="shop-awning" /><div className="shop-window"><span>☕</span></div><div className="shop-door"><div className="door-glow" /></div><div className="shop-window second"><span>{theme === 'sidewalk-cafe' ? '✳' : '♫'}</span></div></div>
     <div className="scene-lamps"><div className="lamp left" /><div className="lamp right" /></div>
     <div className="pavement" /><div className="street-line" />
+    {theme === 'sidewalk-cafe' && isRaining && <div className="rain-weather" aria-label="Trời đang mưa">
+      <div className="rain-darkness" />
+      <div className="rain-sheet rain-sheet-back" />
+      <div className="rain-splashes" />
+    </div>}
     <div className="table table-one"><span>☕</span></div><div className="table table-two"><span>☕</span></div><div className="table table-three"><span>☕</span></div>
     {theme === 'sidewalk-cafe' && latestGift && <div className="gift-thank-board" key={latestGift.id} role="status">
       <span className="gift-sparkle">✦</span>
@@ -433,22 +501,33 @@ function Scene({ theme, guests, comments, gifts, viewMode }: { theme: Theme; gue
       {latestGift.giftImage ? <img className="gift-image" src={latestGift.giftImage} alt={latestGift.giftName} /> : <span className="gift-fallback">🎁</span>}
     </div>}
     {theme === 'sidewalk-cafe' && <div className="cafe-staff" aria-label="Nhân viên quán cà phê">
-      <div className="staff-member staff-owner"><img src="/characters/cafe-owner.png" alt="Cô chủ Hương đang pha cà phê" />{showStaffBubble && dialogue.speaker === 'owner' && <div className="staff-bubble"><strong>{dialogue.name}</strong>{dialogue.message}</div>}</div>
-      <div className="staff-member staff-maid"><img src="/characters/maid-server-v2.png" alt="Lan đang phục vụ cà phê" />{showStaffBubble && dialogue.speaker === 'maid' && <div className="staff-bubble"><strong>{dialogue.name}</strong>{dialogue.message}</div>}</div>
-      <div className="staff-member staff-executive"><img src="/characters/executive-server-v2.png" alt="Minh đang phục vụ cà phê" />{showStaffBubble && dialogue.speaker === 'executive' && <div className="staff-bubble"><strong>{dialogue.name}</strong>{dialogue.message}</div>}</div>
+      <div className="staff-member staff-owner"><img src="/characters/cafe-owner.png" alt="Cô chủ Hương đang pha cà phê" /></div>
+      <div className="staff-member staff-maid"><img src="/characters/maid-server-v2.png" alt="Lan đang phục vụ cà phê" /></div>
+      <div className="staff-member staff-executive"><img src="/characters/executive-server-v2.png" alt="Minh đang phục vụ cà phê" /></div>
     </div>}
     {guests.map((guest) => {
       const { left, top, depth } = getSeatPosition(guest.seat, viewMode);
       const guestStyle = getGuestStyle(guest);
-      const latest = comments.find((comment) => comment.guestId === guest.id);
-      const showBubble = latest && now - latest.timestamp < 7000;
       return <div className={`scene-guest chair-${guest.seat % 2}`} key={guest.id} style={{ left: `${left}%`, top: `${top}%`, width: guestSize.width, height: guestSize.height, zIndex: 5 + depth }} title={`@${guest.username}`}>
-        {showBubble && <div className="speech-bubble" key={latest.id}>{latest.comment}</div>}
         <div className="guest-name"><Avatar avatar={guest.avatar} name={guest.nickname} /><span>{guest.nickname}</span></div>
         <div className="guest-chair" />
         <div className="guest-character"><img src={guestStyle.src} alt={`${guest.nickname} trong trang phục ${guestStyle.label}`} /></div>
       </div>;
     })}
     {guests.length === 0 && <div className="scene-placeholder"><span>☕</span><strong>Quán đang chờ khách</strong><small>Khách vào LIVE sẽ xuống quán và tìm ghế ngồi.</small></div>}
+    {theme === 'sidewalk-cafe' && isRaining && <div className="cafe-rain-shelter" aria-hidden="true"><div className="tarp"><span className="tarp-seam seam-one" /><span className="tarp-seam seam-two" /><span className="tarp-drip drip-one" /><span className="tarp-drip drip-two" /><span className="tarp-drip drip-three" /></div><span className="tarp-pole pole-left" /><span className="tarp-pole pole-right" /></div>}
+    <div className="scene-dialogue-layer">
+      {theme === 'sidewalk-cafe' && <>
+        <div className="staff-dialogue-anchor staff-owner">{showStaffBubble && dialogue.speaker === 'owner' && <div className="staff-bubble"><strong>{dialogue.name}</strong>{dialogue.message}</div>}</div>
+        <div className="staff-dialogue-anchor staff-maid">{showStaffBubble && dialogue.speaker === 'maid' && <div className="staff-bubble"><strong>{dialogue.name}</strong>{dialogue.message}</div>}</div>
+        <div className="staff-dialogue-anchor staff-executive">{showStaffBubble && dialogue.speaker === 'executive' && <div className="staff-bubble"><strong>{dialogue.name}</strong>{dialogue.message}</div>}</div>
+      </>}
+      {guests.map((guest) => {
+        const latest = comments.find((comment) => comment.guestId === guest.id);
+        if (!latest || now - latest.timestamp >= 7000) return null;
+        const { left, top } = getSeatPosition(guest.seat, viewMode);
+        return <div className="scene-dialogue-guest" key={latest.id} style={{ left: `${left}%`, top: `${top}%`, width: guestSize.width, height: guestSize.height }}><div className="speech-bubble">{latest.comment}</div></div>;
+      })}
+    </div>
   </div>;
 }
