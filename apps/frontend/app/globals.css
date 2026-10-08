@@ -1376,6 +1376,36 @@ input::placeholder {
   transform: translateX(-50%);
   animation: bubble-pop 0.2s ease-out;
 }
+.speech-speaker {
+  display: flex;
+  align-items: baseline;
+  gap: 5px;
+  min-width: 0;
+  margin-bottom: 4px;
+  padding-bottom: 4px;
+  border-bottom: 1px solid #b998654d;
+  white-space: nowrap;
+}
+.speech-speaker strong,
+.speech-speaker small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.speech-speaker strong {
+  max-width: 105px;
+  color: #9d4f35;
+  font-size: 9px;
+  letter-spacing: .02em;
+}
+.speech-speaker small {
+  max-width: 75px;
+  color: #8b755d;
+  font-size: 8px;
+  font-weight: 700;
+}
+.speech-message {
+  display: block;
+}
 .scene-dialogue-layer {
   position: absolute;
   z-index: 35;

@@ -528,7 +528,7 @@ function Scene({ theme, guests, comments, gifts, viewMode, isRaining }: { theme:
         const latest = comments.find((comment) => comment.guestId === guest.id);
         if (!latest || now - latest.timestamp >= 7000) return null;
         const { left, top } = getSeatPosition(guest.seat, viewMode);
-        return <div className="scene-dialogue-guest" key={latest.id} style={{ left: `${left}%`, top: `${top}%`, width: guestSize.width, height: guestSize.height }}><div className="speech-bubble">{latest.comment}</div></div>;
+        return <div className="scene-dialogue-guest" key={latest.id} style={{ left: `${left}%`, top: `${top}%`, width: guestSize.width, height: guestSize.height }}><div className="speech-bubble"><span className="speech-speaker"><strong>{latest.nickname}</strong><small>@{latest.username}</small></span><span className="speech-message">{latest.comment}</span></div></div>;
       })}
     </div>
   </div>;
