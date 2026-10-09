@@ -79,14 +79,41 @@ export interface LiveGift {
   timestamp: number;
 }
 
+export interface LiveSupporter {
+  guestId: string;
+  username: string;
+  nickname: string;
+  avatar: string;
+  gifts: number;
+  diamonds: number;
+  likes: number;
+}
+
+export interface LiveLeaderboard {
+  gifters: LiveSupporter[];
+  likers: LiveSupporter[];
+}
+
 export type ViewMode = 'desktop' | 'phone';
 export type KidnappingPhase = 'idle' | 'arriving' | 'rescue' | 'saved' | 'abducted';
+
+export interface LeaderboardPlacement {
+  x: number;
+  y: number;
+  scale: number;
+}
+
+export type LeaderboardLayout = Record<ViewMode, {
+  gifters: LeaderboardPlacement;
+  likers: LeaderboardPlacement;
+}>;
 
 export interface RoomPresentation {
   viewMode: ViewMode;
   virtualGuestsEnabled: boolean;
   seatSpacing: number;
   isRaining: boolean;
+  leaderboardLayout: LeaderboardLayout;
   kidnapping: {
     phase: KidnappingPhase;
     hostages: LiveGuest[];
@@ -100,6 +127,7 @@ export interface RoomSnapshot {
   guests: LiveGuest[];
   comments: LiveComment[];
   gifts: LiveGift[];
+  leaderboard: LiveLeaderboard;
   viewers: number | null;
 }
 

@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useId, useMemo, useRef, useState, type CSSProperties, type FormEvent } from 'react';
+import { useCallback, useEffect, useId, useMemo, useRef, useState, type CSSProperties, type FormEvent, type PointerEvent as ReactPointerEvent } from 'react';
 import { io, type Socket } from 'socket.io-client';
 
 type Theme = 'sidewalk-cafe' | 'tea-room' | 'beach-bar';
@@ -18,8 +18,12 @@ type Room = { id: string; name: string; theme: Theme; platform?: LivePlatform; t
 type Guest = { id: string; username: string; nickname: string; avatar: string; seat: number; joinedAt: number; isVirtual?: boolean };
 type Comment = { id: string; guestId: string; username: string; nickname: string; avatar: string; comment: string; timestamp: number };
 type Gift = { id: string; guestId: string; username: string; nickname: string; avatar: string; giftId: string; giftName: string; giftImage: string; count: number; diamonds: number; timestamp: number };
-type RoomPresentation = { viewMode: ViewMode; virtualGuestsEnabled: boolean; seatSpacing: number; isRaining: boolean; kidnapping: KidnappingEvent };
-type Snapshot = { status: Status; guests: Guest[]; comments: Comment[]; gifts: Gift[]; viewers: number | null; presentation?: RoomPresentation };
+type Supporter = { guestId: string; username: string; nickname: string; avatar: string; gifts: number; diamonds: number; likes: number };
+type Leaderboard = { gifters: Supporter[]; likers: Supporter[] };
+type BoardPlacement = { x: number; y: number; scale: number };
+type LeaderboardLayout = Record<ViewMode, { gifters: BoardPlacement; likers: BoardPlacement }>;
+type RoomPresentation = { viewMode: ViewMode; virtualGuestsEnabled: boolean; seatSpacing: number; isRaining: boolean; leaderboardLayout: LeaderboardLayout; kidnapping: KidnappingEvent };
+type Snapshot = { status: Status; guests: Guest[]; comments: Comment[]; gifts: Gift[]; leaderboard?: Leaderboard; viewers: number | null; presentation?: RoomPresentation };
 type Reply<T = undefined> = { ok: boolean; message?: string; data?: T };
 type RainSettings = { automatic: boolean; maxDelayMinutes: number; durationSeconds: number };
 type KidnappingSettings = { automatic: boolean; maxDelayMinutes: number };
@@ -29,8 +33,14 @@ type KidnappingEvent = { phase: KidnappingPhase; hostages: Guest[]; deadline: nu
 const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL ?? 'http://localhost:3001';
 const MAX_AUDIO_FILE_SIZE = 100 * 1024 * 1024;
 const emptyStatus: Status = { state: 'disconnected', message: 'Chưa kết nối LIVE' };
+const emptyLeaderboard = (): Leaderboard => ({ gifters: [], likers: [] });
+const defaultLeaderboardLayout = (): LeaderboardLayout => ({
+  desktop: { gifters: { x: 74, y: 3, scale: 100 }, likers: { x: 74, y: 24, scale: 100 } },
+  phone: { gifters: { x: 51, y: 9, scale: 100 }, likers: { x: 51, y: 29, scale: 100 } },
+});
 const defaultPresentation = (): RoomPresentation => ({
   viewMode: 'desktop', virtualGuestsEnabled: true, seatSpacing: 100, isRaining: false,
+  leaderboardLayout: defaultLeaderboardLayout(),
   kidnapping: { phase: 'idle', hostages: [], deadline: null },
 });
 
@@ -198,11 +208,14 @@ function RoomScreen({ room, onBack }: { room: Room; onBack: () => void }) {
   const [guests, setGuests] = useState<Guest[]>([]);
   const [comments, setComments] = useState<Comment[]>([]);
   const [gifts, setGifts] = useState<Gift[]>([]);
+  const [leaderboard, setLeaderboard] = useState<Leaderboard>(emptyLeaderboard);
   const [viewers, setViewers] = useState<number | null>(null);
   const [error, setError] = useState('');
   const [viewMode, setViewMode] = useState<ViewMode>('desktop');
   const [virtualGuestsEnabled, setVirtualGuestsEnabled] = useState(true);
   const [seatSpacing, setSeatSpacing] = useState(100);
+  const [leaderboardLayout, setLeaderboardLayout] = useState<LeaderboardLayout>(defaultLeaderboardLayout);
+  const [leaderboardEditing, setLeaderboardEditing] = useState(false);
   const [rainSettings, setRainSettings] = useState<RainSettings>({ automatic: true, maxDelayMinutes: 3, durationSeconds: 45 });
   const [isRaining, setIsRaining] = useState(false);
   const [kidnappingSettings, setKidnappingSettings] = useState<KidnappingSettings>({ automatic: true, maxDelayMinutes: 5 });
@@ -287,7 +300,16 @@ function RoomScreen({ room, onBack }: { room: Room; onBack: () => void }) {
     if (savedKidnapping) {
       try { setKidnappingSettings((current) => ({ ...current, ...JSON.parse(savedKidnapping) })); } catch { /* dùng cấu hình mặc định */ }
     }
+    const savedLeaderboard = window.localStorage.getItem(`live-room-leaderboard-${room.id}`);
+    if (savedLeaderboard) {
+      try { setLeaderboardLayout(JSON.parse(savedLeaderboard) as LeaderboardLayout); } catch { /* dùng vị trí mặc định */ }
+    }
   }, []);
+
+  useEffect(() => {
+    try { window.localStorage.setItem(`live-room-leaderboard-${room.id}`, JSON.stringify(leaderboardLayout)); }
+    catch { /* vẫn giữ bố cục trong phiên hiện tại */ }
+  }, [leaderboardLayout, room.id]);
 
   useEffect(() => {
     if (!rainSettingsSaveSkipped.current) {
@@ -380,12 +402,14 @@ function RoomScreen({ room, onBack }: { room: Room; onBack: () => void }) {
         setGuests(reply.data.guests);
         setComments(reply.data.comments);
         setGifts(reply.data.gifts ?? []);
+        setLeaderboard(reply.data.leaderboard ?? emptyLeaderboard());
         setViewers(reply.data.viewers);
         if (reply.data.presentation) {
           setViewMode(reply.data.presentation.viewMode);
           setVirtualGuestsEnabled(reply.data.presentation.virtualGuestsEnabled);
           setSeatSpacing(reply.data.presentation.seatSpacing);
           setIsRaining(reply.data.presentation.isRaining);
+          setLeaderboardLayout(reply.data.presentation.leaderboardLayout ?? defaultLeaderboardLayout());
           setKidnapping(reply.data.presentation.kidnapping);
         }
         setPresentationReady(true);
@@ -401,6 +425,7 @@ function RoomScreen({ room, onBack }: { room: Room; onBack: () => void }) {
     connection.on('live:guest-left', ({ id }: { id: string }) => setGuests((current) => current.filter((guest) => guest.id !== id)));
     connection.on('live:comment', (comment: Comment) => setComments((current) => [comment, ...current].slice(0, 100)));
     connection.on('live:gift', (gift: Gift) => setGifts((current) => [gift, ...current].slice(0, 20)));
+    connection.on('live:leaderboard', (next: Leaderboard) => setLeaderboard(next));
     connection.on('live:stats', ({ viewers: count }: { viewers: number | null }) => setViewers(count));
     connection.on('live:reset', () => {
       clearNextKidnapping();
@@ -409,6 +434,7 @@ function RoomScreen({ room, onBack }: { room: Room; onBack: () => void }) {
       setGuests([]);
       setComments([]);
       setGifts([]);
+      setLeaderboard(emptyLeaderboard());
       setViewers(null);
     });
     connection.on('connect_error', () => setError('Không thể kết nối backend.'));
@@ -418,11 +444,14 @@ function RoomScreen({ room, onBack }: { room: Room; onBack: () => void }) {
 
   useEffect(() => {
     if (!socket || !presentationReady) return;
-    const presentation: RoomPresentation = { viewMode, virtualGuestsEnabled, seatSpacing, isRaining, kidnapping };
-    socket.emit('room:presentation:update', { roomId: room.id, presentation }, (reply: Reply) => {
-      if (!reply.ok) setError(reply.message ?? 'Không đồng bộ được màn hình phát.');
-    });
-  }, [isRaining, kidnapping, presentationReady, room.id, seatSpacing, socket, viewMode, virtualGuestsEnabled]);
+    const timer = window.setTimeout(() => {
+      const presentation: RoomPresentation = { viewMode, virtualGuestsEnabled, seatSpacing, isRaining, leaderboardLayout, kidnapping };
+      socket.emit('room:presentation:update', { roomId: room.id, presentation }, (reply: Reply) => {
+        if (!reply.ok) setError(reply.message ?? 'Không đồng bộ được màn hình phát.');
+      });
+    }, 50);
+    return () => window.clearTimeout(timer);
+  }, [isRaining, kidnapping, leaderboardLayout, presentationReady, room.id, seatSpacing, socket, viewMode, virtualGuestsEnabled]);
 
   useEffect(() => () => {
     if (stageWindowRef.current && !stageWindowRef.current.closed) stageWindowRef.current.close();
@@ -447,6 +476,22 @@ function RoomScreen({ room, onBack }: { room: Room; onBack: () => void }) {
     try { window.localStorage.setItem(`live-room-seat-spacing-${room.id}`, String(spacing)); }
     catch { /* vẫn áp dụng khoảng cách cho phiên hiện tại */ }
   }
+
+  function changeBoardPlacement(board: 'gifters' | 'likers', placement: BoardPlacement) {
+    const approximateWidth = viewMode === 'phone' ? 46 : 23;
+    const maximumX = Math.max(0, 100 - approximateWidth * placement.scale / 100);
+    const bounded = { ...placement, x: Math.min(maximumX, Math.max(0, placement.x)), y: Math.min(92, Math.max(0, placement.y)) };
+    setLeaderboardLayout((current) => ({
+      ...current,
+      [viewMode]: { ...current[viewMode], [board]: bounded },
+    }));
+  }
+
+  function resetLeaderboardLayout() {
+    setLeaderboardLayout((current) => ({ ...current, [viewMode]: defaultLeaderboardLayout()[viewMode] }));
+  }
+
+  const editableBoards: Array<'gifters' | 'likers'> = room.platform === 'youtube' ? ['gifters'] : ['gifters', 'likers'];
 
   function openPresentationWindow() {
     const width = window.screen.availWidth;
@@ -478,6 +523,15 @@ function RoomScreen({ room, onBack }: { room: Room; onBack: () => void }) {
         </label>
         <button type="button" className="secondary-button" onClick={() => changeSeatSpacing(100)}>Mặc định</button>
       </section>
+      <section className={`leaderboard-controls ${leaderboardEditing ? 'editing' : ''}`} aria-label="Điều chỉnh bảng top">
+        <div className="weather-heading"><span className="weather-icon" aria-hidden="true">🏆</span><div><span className="eyebrow">BẢNG TOP</span><strong>{leaderboardEditing ? 'Kéo từng bảng ngay trên background' : `Bố cục riêng cho ${viewMode === 'phone' ? 'điện thoại' : 'desktop'}`}</strong></div></div>
+        {editableBoards.map((board) => <label className="leaderboard-size" key={board}>{board === 'gifters' ? '🎁 Quà' : '♥ Tim'}
+          <input type="range" min="50" max="180" step="5" value={leaderboardLayout[viewMode][board].scale} onChange={(event) => changeBoardPlacement(board, { ...leaderboardLayout[viewMode][board], scale: Number(event.target.value) })} />
+          <output>{leaderboardLayout[viewMode][board].scale}%</output>
+        </label>)}
+        <button type="button" className={`secondary-button ${leaderboardEditing ? 'active' : ''}`} onClick={() => setLeaderboardEditing((current) => !current)}>{leaderboardEditing ? '✓ Xong kéo thả' : '✥ Kéo thả vị trí'}</button>
+        <button type="button" className="secondary-button" onClick={resetLeaderboardLayout}>Đặt lại</button>
+      </section>
       <section className="weather-controls" aria-label="Khách ảo trong quán">
         <div className="weather-heading"><span className="weather-icon" aria-hidden="true">☕</span><div><span className="eyebrow">KHÁCH ẢO</span><strong>10 khách trò chuyện tự động trong quán</strong></div></div>
         <label className="weather-toggle"><input type="checkbox" checked={virtualGuestsEnabled} onChange={(event) => setVirtualGuestsEnabled(event.target.checked)} /><span /> Bật khách ảo</label>
@@ -496,7 +550,7 @@ function RoomScreen({ room, onBack }: { room: Room; onBack: () => void }) {
         <button type="button" className="danger-button" disabled={kidnapping.phase !== 'idle' || guests.length < 2} onClick={startKidnapping}>{room.theme === 'beach-bar' ? '🚤' : '🚐'} Bắt cóc ngay</button>
       </section>}
       <div className={`room-layout ${viewMode}-view`}>
-        <div className="scene-column"><div className="stream-stage"><Scene theme={room.theme} guests={guests} comments={comments} gifts={gifts} viewMode={viewMode} isRaining={isRaining} kidnapping={kidnapping} showYouTubeJoinNotice={room.platform === 'youtube'} virtualGuestsEnabled={virtualGuestsEnabled} seatSpacing={seatSpacing} /></div><div className="scene-footer"><span><i className="status-dot" />{status.message}</span><span>{room.platform === 'youtube' ? 'YouTube LIVE' : `${viewers === null ? '—' : viewers.toLocaleString('vi-VN')} người xem TikTok`} · {guests.length} khách LIVE{virtualGuestsEnabled ? ' · 10 khách ảo' : ''}</span><button type="button" className="fullscreen-button" onClick={openPresentationWindow}>⛶ Mở màn hình LIVE</button></div></div>
+        <div className="scene-column"><div className="stream-stage"><Scene theme={room.theme} guests={guests} comments={comments} gifts={gifts} leaderboard={leaderboard} leaderboardLayout={leaderboardLayout} leaderboardEditing={leaderboardEditing} onLeaderboardPlacementChange={changeBoardPlacement} viewMode={viewMode} isRaining={isRaining} kidnapping={kidnapping} showYouTubeJoinNotice={room.platform === 'youtube'} virtualGuestsEnabled={virtualGuestsEnabled} seatSpacing={seatSpacing} /></div><div className="scene-footer"><span><i className="status-dot" />{status.message}</span><span>{room.platform === 'youtube' ? 'YouTube LIVE' : `${viewers === null ? '—' : viewers.toLocaleString('vi-VN')} người xem TikTok`} · {guests.length} khách LIVE{virtualGuestsEnabled ? ' · 10 khách ảo' : ''}</span><button type="button" className="fullscreen-button" onClick={openPresentationWindow}>⛶ Mở màn hình LIVE</button></div></div>
         <aside className="chat-panel"><div className="chat-head"><div><span className="eyebrow">CUỘC TRÒ CHUYỆN</span><h2>Bình luận LIVE</h2></div><span className="chat-count">{comments.length}</span></div><div className="chat-list">{comments.length ? comments.map((comment) => <div className="chat-line" key={comment.id}><Avatar avatar={comment.avatar} name={comment.nickname} /><div><div className="chat-meta"><strong>{comment.nickname}</strong><time>{new Date(comment.timestamp).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}</time></div><p>{comment.comment}</p></div></div>) : <div className="chat-empty"><span>💬</span><strong>Chưa có lời nhắn</strong><p>Khi có bình luận, bong bóng chat sẽ hiện trên nhân vật trong quán.</p></div>}</div><div className="chat-foot">Tin nhắn được lấy trực tiếp từ {room.platform === 'youtube' ? 'YouTube' : 'TikTok'} LIVE</div></aside>
       </div>
     </main>
@@ -508,6 +562,7 @@ export function LiveStageViewer({ roomId }: { roomId: string }) {
   const [guests, setGuests] = useState<Guest[]>([]);
   const [comments, setComments] = useState<Comment[]>([]);
   const [gifts, setGifts] = useState<Gift[]>([]);
+  const [leaderboard, setLeaderboard] = useState<Leaderboard>(emptyLeaderboard);
   const [presentation, setPresentation] = useState<RoomPresentation>(defaultPresentation);
   const [error, setError] = useState('');
   const [needsFullscreen, setNeedsFullscreen] = useState(false);
@@ -558,6 +613,7 @@ export function LiveStageViewer({ roomId }: { roomId: string }) {
         setGuests(reply.data.guests);
         setComments(reply.data.comments);
         setGifts(reply.data.gifts ?? []);
+        setLeaderboard(reply.data.leaderboard ?? emptyLeaderboard());
         if (reply.data.presentation) setPresentation(reply.data.presentation);
       });
     });
@@ -566,7 +622,8 @@ export function LiveStageViewer({ roomId }: { roomId: string }) {
     connection.on('live:guest-left', ({ id }: { id: string }) => setGuests((current) => current.filter((guest) => guest.id !== id)));
     connection.on('live:comment', (comment: Comment) => setComments((current) => [comment, ...current].slice(0, 100)));
     connection.on('live:gift', (gift: Gift) => setGifts((current) => [gift, ...current].slice(0, 20)));
-    connection.on('live:reset', () => { setGuests([]); setComments([]); setGifts([]); });
+    connection.on('live:leaderboard', (next: Leaderboard) => setLeaderboard(next));
+    connection.on('live:reset', () => { setGuests([]); setComments([]); setGifts([]); setLeaderboard(emptyLeaderboard()); });
     connection.on('connect_error', () => setError('Mất kết nối với máy chủ.'));
     return () => { connection.emit('room:leave', { roomId }); connection.disconnect(); };
   }, [roomId]);
@@ -576,7 +633,7 @@ export function LiveStageViewer({ roomId }: { roomId: string }) {
 
   return <main className={`presentation-page ${presentation.viewMode}-view`}>
     <div className="stream-stage presentation-stream-stage">
-      <Scene theme={room.theme} guests={guests} comments={comments} gifts={gifts} viewMode={presentation.viewMode} isRaining={presentation.isRaining} kidnapping={presentation.kidnapping} showYouTubeJoinNotice={room.platform === 'youtube'} virtualGuestsEnabled={presentation.virtualGuestsEnabled} seatSpacing={presentation.seatSpacing} />
+      <Scene theme={room.theme} guests={guests} comments={comments} gifts={gifts} leaderboard={leaderboard} leaderboardLayout={presentation.leaderboardLayout ?? defaultLeaderboardLayout()} viewMode={presentation.viewMode} isRaining={presentation.isRaining} kidnapping={presentation.kidnapping} showYouTubeJoinNotice={room.platform === 'youtube'} virtualGuestsEnabled={presentation.virtualGuestsEnabled} seatSpacing={presentation.seatSpacing} />
     </div>
     {needsFullscreen && <button type="button" className="enter-fullscreen-button" onClick={() => void enterFullscreen()}><span>⛶</span><strong>Vào toàn màn hình</strong><small>Trình duyệt cần bạn xác nhận một lần</small></button>}
   </main>;
@@ -855,7 +912,77 @@ function useVirtualConversation(enabled: boolean) {
   return enabled ? comment : null;
 }
 
-function Scene({ theme, guests, comments, gifts, viewMode, isRaining, kidnapping, showYouTubeJoinNotice, virtualGuestsEnabled, seatSpacing }: { theme: Theme; guests: Guest[]; comments: Comment[]; gifts: Gift[]; viewMode: ViewMode; isRaining: boolean; kidnapping: KidnappingEvent; showYouTubeJoinNotice: boolean; virtualGuestsEnabled: boolean; seatSpacing: number }) {
+function compactNumber(value: number) {
+  return new Intl.NumberFormat('vi-VN', { notation: 'compact', maximumFractionDigits: 1 }).format(value);
+}
+
+function LeaderboardGroup({ icon, title, entries, metric, editing }: { icon: string; title: string; entries: Supporter[]; metric: 'gift' | 'like'; editing: boolean }) {
+  return <section className="support-leaderboard-group">
+    <h3><span aria-hidden="true">{icon}</span>{title}</h3>
+    {entries.length > 0 ? <ol>
+      {entries.map((entry, index) => <li key={entry.guestId}>
+        <span className={`support-rank rank-${index + 1}`}>{index + 1}</span>
+        <Avatar avatar={entry.avatar} name={entry.nickname} />
+        <strong>{entry.nickname}</strong>
+        <span className="support-score">{metric === 'like'
+          ? `${compactNumber(entry.likes)} ♥`
+          : entry.diamonds > 0 ? `${compactNumber(entry.diamonds)} 💎` : `${compactNumber(entry.gifts)} 🎁`}</span>
+      </li>)}
+    </ol> : editing ? <div className="support-empty">✥ Kéo bảng này</div> : null}
+  </section>;
+}
+
+function PositionedLeaderboard({ board, placement, entries, editing, onChange }: { board: 'gifters' | 'likers'; placement: BoardPlacement; entries: Supporter[]; editing: boolean; onChange?: (board: 'gifters' | 'likers', placement: BoardPlacement) => void }) {
+  const drag = useRef<{ pointerId: number; clientX: number; clientY: number; x: number; y: number; width: number; height: number; maxX: number; maxY: number } | null>(null);
+  function startDrag(event: ReactPointerEvent<HTMLElement>) {
+    if (!editing || !onChange) return;
+    const scene = event.currentTarget.closest('.scene');
+    if (!(scene instanceof HTMLElement)) return;
+    const bounds = scene.getBoundingClientRect();
+    const boardBounds = event.currentTarget.getBoundingClientRect();
+    drag.current = {
+      pointerId: event.pointerId, clientX: event.clientX, clientY: event.clientY,
+      x: placement.x, y: placement.y, width: bounds.width, height: bounds.height,
+      maxX: Math.max(0, 100 - boardBounds.width / bounds.width * 100),
+      maxY: Math.max(0, 100 - boardBounds.height / bounds.height * 100),
+    };
+    event.currentTarget.setPointerCapture(event.pointerId);
+    event.preventDefault();
+  }
+  function moveDrag(event: ReactPointerEvent<HTMLElement>) {
+    const origin = drag.current;
+    if (!origin || origin.pointerId !== event.pointerId || !onChange) return;
+    onChange(board, {
+      ...placement,
+      x: Math.min(origin.maxX, Math.max(0, origin.x + ((event.clientX - origin.clientX) / origin.width) * 100)),
+      y: Math.min(origin.maxY, Math.max(0, origin.y + ((event.clientY - origin.clientY) / origin.height) * 100)),
+    });
+  }
+  function stopDrag(event: ReactPointerEvent<HTMLElement>) {
+    if (drag.current?.pointerId === event.pointerId) drag.current = null;
+  }
+  const title = board === 'gifters' ? 'TOP TẶNG QUÀ' : 'TOP THẢ TIM';
+  return <aside
+    className={`support-leaderboard ${editing ? 'is-editing' : ''}`}
+    style={{ left: `${placement.x}%`, top: `${placement.y}%`, '--board-scale': placement.scale / 100 } as CSSProperties}
+    aria-label={title}
+    onPointerDown={startDrag}
+    onPointerMove={moveDrag}
+    onPointerUp={stopDrag}
+    onPointerCancel={stopDrag}
+  >
+    <LeaderboardGroup icon={board === 'gifters' ? '🎁' : '♥'} title={title} entries={entries} metric={board === 'gifters' ? 'gift' : 'like'} editing={editing} />
+  </aside>;
+}
+
+function LiveLeaderboard({ leaderboard, layout, viewMode, editing, allowLikes, onChange }: { leaderboard: Leaderboard; layout: LeaderboardLayout; viewMode: ViewMode; editing: boolean; allowLikes: boolean; onChange?: (board: 'gifters' | 'likers', placement: BoardPlacement) => void }) {
+  return <>
+    {(leaderboard.gifters.length > 0 || editing) && <PositionedLeaderboard board="gifters" placement={layout[viewMode].gifters} entries={leaderboard.gifters} editing={editing} onChange={onChange} />}
+    {allowLikes && (leaderboard.likers.length > 0 || editing) && <PositionedLeaderboard board="likers" placement={layout[viewMode].likers} entries={leaderboard.likers} editing={editing} onChange={onChange} />}
+  </>;
+}
+
+function Scene({ theme, guests, comments, gifts, leaderboard, leaderboardLayout, leaderboardEditing = false, onLeaderboardPlacementChange, viewMode, isRaining, kidnapping, showYouTubeJoinNotice, virtualGuestsEnabled, seatSpacing }: { theme: Theme; guests: Guest[]; comments: Comment[]; gifts: Gift[]; leaderboard: Leaderboard; leaderboardLayout: LeaderboardLayout; leaderboardEditing?: boolean; onLeaderboardPlacementChange?: (board: 'gifters' | 'likers', placement: BoardPlacement) => void; viewMode: ViewMode; isRaining: boolean; kidnapping: KidnappingEvent; showYouTubeJoinNotice: boolean; virtualGuestsEnabled: boolean; seatSpacing: number }) {
   const [now, setNow] = useState(Date.now());
   useEffect(() => { const timer = window.setInterval(() => setNow(Date.now()), 500); return () => clearInterval(timer); }, []);
   const dialogues = theme === 'beach-bar' ? beachStaffDialogues : staffDialogues;
@@ -871,6 +998,7 @@ function Scene({ theme, guests, comments, gifts, viewMode, isRaining, kidnapping
   const secondsLeft = kidnapping.deadline ? Math.max(0, Math.ceil((kidnapping.deadline - now) / 1000)) : 0;
   return <div className={`scene ${theme} scene-${viewMode} crowd-${crowdDensity}`}>
     {showYouTubeJoinNotice && <div className="youtube-join-notice"><span aria-hidden="true">💬</span> bình luận bất kỳ để vào quán</div>}
+    {(leaderboard.gifters.length > 0 || leaderboard.likers.length > 0 || leaderboardEditing) && <LiveLeaderboard leaderboard={leaderboard} layout={leaderboardLayout} viewMode={viewMode} editing={leaderboardEditing} allowLikes={!showYouTubeJoinNotice} onChange={onLeaderboardPlacementChange} />}
     <div className="scene-sky"><span className="moon" /><span className="star star-one">✦</span><span className="star star-two">✧</span><span className="star star-three">✦</span></div>
     <div className="shop-front"><div className="shop-roof" /><div className="shop-sign">{theme === 'sidewalk-cafe' ? 'CÀ PHÊ · GÓC PHỐ' : 'PHÒNG TRÀ · ĐÊM NAY'}</div><div className="shop-awning" /><div className="shop-window"><span>☕</span></div><div className="shop-door"><div className="door-glow" /></div><div className="shop-window second"><span>{theme === 'sidewalk-cafe' ? '✳' : '♫'}</span></div></div>
     <div className="scene-lamps"><div className="lamp left" /><div className="lamp right" /></div>

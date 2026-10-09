@@ -1,12 +1,13 @@
 import { Injectable, Logger, OnModuleDestroy } from '@nestjs/common';
 import { LiveChat, NotLiveError, RateLimitError, ScrapeError, type ChatItem } from 'youtube-chat-next';
 import type { Server } from 'socket.io';
-import type { LiveRoom, LiveStatus, RoomSnapshot } from './live.types';
+import type { LiveGift, LiveRoom, LiveStatus, LiveSupporter, RoomSnapshot } from './live.types';
 import { youtubeLiveId } from './youtube-source';
 
 interface YouTubeSession {
   connection: LiveChat | null;
   snapshot: RoomSnapshot;
+  supporters: Map<string, LiveSupporter>;
   seen: Set<string>;
 }
 
@@ -22,10 +23,10 @@ export class YouTubeLiveService implements OnModuleDestroy {
     let session = this.sessions.get(roomId);
     if (!session) {
       session = {
-        connection: null, seen: new Set(),
+        connection: null, supporters: new Map(), seen: new Set(),
         snapshot: {
           status: { state: 'disconnected', message: 'Chưa kết nối YouTube LIVE' },
-          guests: [], comments: [], gifts: [], viewers: null,
+          guests: [], comments: [], gifts: [], leaderboard: { gifters: [], likers: [] }, viewers: null,
         },
       };
       this.sessions.set(roomId, session);
@@ -35,7 +36,13 @@ export class YouTubeLiveService implements OnModuleDestroy {
 
   snapshot(roomId: string): RoomSnapshot {
     const data = this.session(roomId).snapshot;
-    return { ...data, guests: [...data.guests], comments: [...data.comments], gifts: [] };
+    return {
+      ...data,
+      guests: [...data.guests],
+      comments: [...data.comments],
+      gifts: [...data.gifts],
+      leaderboard: { gifters: data.leaderboard.gifters.map((entry) => ({ ...entry })), likers: [] },
+    };
   }
 
   private emit(roomId: string, event: string, payload: unknown) {
@@ -54,14 +61,16 @@ export class YouTubeLiveService implements OnModuleDestroy {
     session.connection = null;
     connection?.stop();
     session.seen.clear();
-    Object.assign(session.snapshot, { guests: [], comments: [], gifts: [], viewers: null });
+    session.supporters.clear();
+    Object.assign(session.snapshot, { guests: [], comments: [], gifts: [], leaderboard: { gifters: [], likers: [] }, viewers: null });
     this.setStatus(roomId, { state: 'disconnected', message: reason });
-    this.emit(roomId, 'live:reset', { guests: [], comments: [], gifts: [], viewers: null });
+    this.emit(roomId, 'live:reset', { guests: [], comments: [], gifts: [], leaderboard: { gifters: [], likers: [] }, viewers: null });
   }
 
   private receive(roomId: string, item: ChatItem) {
     const session = this.session(roomId);
-    const comment = item.message.map((part) => 'text' in part ? part.text : part.emojiText || part.alt).join('').trim();
+    const message = item.message.map((part) => 'text' in part ? part.text : part.emojiText || part.alt).join('').trim();
+    const comment = message || (item.superchat ? `Đã gửi Super Chat ${item.superchat.amount}` : '');
     if (!comment || !item.author.channelId || session.seen.has(item.id)) return;
     session.seen.add(item.id);
     if (session.seen.size > 2000) session.seen.delete(session.seen.values().next().value!);
@@ -92,6 +101,30 @@ export class YouTubeLiveService implements OnModuleDestroy {
     data.comments.unshift(entry);
     data.comments = data.comments.slice(0, 100);
     this.emit(roomId, 'live:comment', entry);
+    if (item.superchat) {
+      const gift: LiveGift = {
+        id: `youtube:gift:${item.id}`, guestId: guest.id, username: guest.username,
+        nickname: guest.nickname, avatar: guest.avatar, giftId: 'youtube-superchat',
+        giftName: `Super Chat ${item.superchat.amount}`,
+        giftImage: item.superchat.sticker?.url ?? '', count: 1, diamonds: 0,
+        timestamp: entry.timestamp,
+      };
+      data.gifts.unshift(gift);
+      data.gifts = data.gifts.slice(0, 20);
+      const supporter = session.supporters.get(guest.id) ?? {
+        guestId: guest.id, username: guest.username, nickname: guest.nickname, avatar: guest.avatar,
+        gifts: 0, diamonds: 0, likes: 0,
+      };
+      session.supporters.set(guest.id, { ...supporter, gifts: supporter.gifts + 1 });
+      data.leaderboard = {
+        gifters: [...session.supporters.values()]
+          .sort((a, b) => b.gifts - a.gifts)
+          .slice(0, 3).map((supporterEntry) => ({ ...supporterEntry })),
+        likers: [],
+      };
+      this.emit(roomId, 'live:leaderboard', data.leaderboard);
+      this.emit(roomId, 'live:gift', gift);
+    }
   }
 
   async connect(room: LiveRoom) {

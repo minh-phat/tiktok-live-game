@@ -76,12 +76,35 @@ test('maps chat and emoji to guests/comments, deduplicates and isolates rooms', 
   assert.equal(data.comments[0].guestId, 'youtube:UC-viewer');
   assert.equal(data.viewers, null);
   assert.deepEqual(data.gifts, []);
+  assert.deepEqual(data.leaderboard, { gifters: [], likers: [] });
   assert.ok(events.every((event) => event.target === `room:${room.id}`));
   assert.equal(service.snapshot('other-room').comments.length, 0);
   service.disconnect(room.id);
   connections[0].emit('chat', chat('late-message'));
   assert.equal(service.snapshot(room.id).comments.length, 0);
   assert.equal(service.snapshot(room.id).status.state, 'disconnected');
+});
+
+test('maps YouTube Super Chats and stickers to gifts and a gifter leaderboard', async () => {
+  const { service, connections, events } = setup();
+  await service.connect(room);
+  const paid = chat('paid-1', 'paid-viewer');
+  paid.message = [];
+  paid.superchat = { amount: '₫50.000', color: '#1de9b6', sticker: { url: 'https://example.com/sticker', alt: 'sticker' } };
+  connections[0].emit('chat', paid);
+  connections[0].emit('chat', paid);
+  const second = chat('paid-2', 'paid-viewer');
+  second.superchat = { amount: '₫20.000', color: '#00e5ff' };
+  connections[0].emit('chat', second);
+
+  const data = service.snapshot(room.id);
+  assert.equal(data.gifts.length, 2);
+  assert.equal(data.gifts[1].giftImage, 'https://example.com/sticker');
+  assert.equal(data.comments[1].comment, 'Đã gửi Super Chat ₫50.000');
+  assert.equal(data.leaderboard.gifters[0].gifts, 2);
+  assert.deepEqual(data.leaderboard.likers, []);
+  assert.ok(events.some((entry) => entry.event === 'live:gift'));
+  assert.ok(events.some((entry) => entry.event === 'live:leaderboard'));
 });
 
 test('bounds history and reuses seats when new guests arrive', async () => {
@@ -163,4 +186,27 @@ test('gateway routes by persisted platform and checks ownership for both provide
     assert.equal((await gateway[method](client, { roomId: 'forbidden' })).ok, false);
   }
   assert.deepEqual(calls, ['youtube:connect', 'youtube:disconnect', 'tiktok:connect', 'tiktok:disconnect']);
+});
+
+test('gateway validates leaderboard positions and sizes before broadcasting them', async () => {
+  const provider = { snapshot: () => ({}), connect: async () => {}, disconnect: () => {}, publicError: () => '' };
+  const gateway = new LiveGateway({ getUser: async () => ({ id: 'owner' }) }, {
+    get: async () => ({ id: 'room', platform: 'tiktok' }),
+  }, provider, provider);
+  const broadcasts = [];
+  gateway.server = { to: () => ({ emit: (_event, data) => broadcasts.push(data) }) };
+  const client = { handshake: { headers: {} } };
+  const reply = await gateway.updatePresentation(client, {
+    roomId: 'room',
+    presentation: {
+      leaderboardLayout: {
+        desktop: { gifters: { x: 999, y: -5, scale: 10 }, likers: { x: 22, y: 33, scale: 140 } },
+        phone: { gifters: { x: 44, y: 12, scale: 120 }, likers: { x: 55, y: 40, scale: 90 } },
+      },
+    },
+  });
+  assert.equal(reply.ok, true);
+  assert.deepEqual(reply.data.leaderboardLayout.desktop.gifters, { x: 92, y: 0, scale: 50 });
+  assert.deepEqual(reply.data.leaderboardLayout.desktop.likers, { x: 22, y: 33, scale: 140 });
+  assert.equal(broadcasts.length, 1);
 });

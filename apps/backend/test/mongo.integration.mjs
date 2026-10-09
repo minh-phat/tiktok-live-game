@@ -108,6 +108,10 @@ try {
     const presentationEvent = new Promise((resolve) => ownerSocket.once('room:presentation', resolve));
     const presentation = {
       viewMode: 'phone', virtualGuestsEnabled: false, seatSpacing: 65, isRaining: true,
+      leaderboardLayout: {
+        desktop: { gifters: { x: 70, y: 4, scale: 110 }, likers: { x: 70, y: 28, scale: 95 } },
+        phone: { gifters: { x: 45, y: 8, scale: 90 }, likers: { x: 45, y: 30, scale: 85 } },
+      },
       kidnapping: { phase: 'idle', hostages: [], deadline: null },
     };
     const updatedPresentation = await emit(ownerSocket, 'room:presentation:update', { roomId, presentation });

@@ -1,7 +1,7 @@
 import { Injectable, Logger, OnModuleDestroy } from '@nestjs/common';
 import type { TikTokLiveConnection, ClientEventMap } from 'tiktok-live-connector' with { "resolution-mode": "import" };
 import type { Server } from 'socket.io';
-import type { LiveComment, LiveGift, LiveGuest, LiveRoom, LiveStatus, RoomSnapshot } from './live.types';
+import type { LiveComment, LiveGift, LiveGuest, LiveLeaderboard, LiveRoom, LiveStatus, LiveSupporter, RoomSnapshot } from './live.types';
 
 interface LiveSession {
   connection: TikTokLiveConnection | null;
@@ -10,6 +10,7 @@ interface LiveSession {
   guests: LiveGuest[];
   comments: LiveComment[];
   gifts: LiveGift[];
+  supporters: Map<string, LiveSupporter>;
   viewers: number | null;
 }
 
@@ -37,7 +38,7 @@ export class TikTokLiveService implements OnModuleDestroy {
       session = {
         connection: null, attempt: 0,
         status: { state: 'disconnected', message: 'Chưa kết nối TikTok LIVE' },
-        guests: [], comments: [], gifts: [], viewers: null,
+        guests: [], comments: [], gifts: [], supporters: new Map(), viewers: null,
       };
       this.sessions.set(roomId, session);
     }
@@ -51,6 +52,7 @@ export class TikTokLiveService implements OnModuleDestroy {
       guests: [...session.guests],
       comments: [...session.comments],
       gifts: [...session.gifts],
+      leaderboard: this.leaderboard(session),
       viewers: session.viewers,
     };
   }
@@ -62,6 +64,36 @@ export class TikTokLiveService implements OnModuleDestroy {
   private setStatus(roomId: string, status: LiveStatus) {
     this.session(roomId).status = status;
     this.emit(roomId, 'live:status', status);
+  }
+
+  private leaderboard(session: LiveSession): LiveLeaderboard {
+    const supporters = [...session.supporters.values()];
+    return {
+      gifters: supporters.filter((entry) => entry.gifts > 0)
+        .sort((a, b) => b.diamonds - a.diamonds || b.gifts - a.gifts)
+        .slice(0, 3).map((entry) => ({ ...entry })),
+      likers: supporters.filter((entry) => entry.likes > 0)
+        .sort((a, b) => b.likes - a.likes)
+        .slice(0, 3).map((entry) => ({ ...entry })),
+    };
+  }
+
+  private addSupport(roomId: string, guest: LiveGuest, update: Partial<Pick<LiveSupporter, 'gifts' | 'diamonds' | 'likes'>>) {
+    const session = this.session(roomId);
+    const current = session.supporters.get(guest.id) ?? {
+      guestId: guest.id, username: guest.username, nickname: guest.nickname, avatar: guest.avatar,
+      gifts: 0, diamonds: 0, likes: 0,
+    };
+    session.supporters.set(guest.id, {
+      ...current,
+      username: guest.username,
+      nickname: guest.nickname,
+      avatar: guest.avatar,
+      gifts: current.gifts + (update.gifts ?? 0),
+      diamonds: current.diamonds + (update.diamonds ?? 0),
+      likes: current.likes + (update.likes ?? 0),
+    });
+    this.emit(roomId, 'live:leaderboard', this.leaderboard(session));
   }
 
   private upsertGuest(roomId: string, user: { userId?: string | number | bigint | null; uniqueId?: string | null; displayId?: string | null; nickname?: string | null; profilePictureUrl?: string | null; avatarThumb?: { urlList?: string[] } | null }): LiveGuest | null {
@@ -104,9 +136,10 @@ export class TikTokLiveService implements OnModuleDestroy {
     session.guests = [];
     session.comments = [];
     session.gifts = [];
+    session.supporters.clear();
     session.viewers = null;
     this.setStatus(roomId, { state: 'disconnected', message: reason });
-    this.emit(roomId, 'live:reset', { guests: [], comments: [], gifts: [], viewers: null });
+    this.emit(roomId, 'live:reset', { guests: [], comments: [], gifts: [], leaderboard: { gifters: [], likers: [] }, viewers: null });
   }
 
   async connect(room: LiveRoom) {
@@ -173,7 +206,15 @@ export class TikTokLiveService implements OnModuleDestroy {
       };
       session.gifts.unshift(gift);
       session.gifts = session.gifts.slice(0, MAX_GIFTS);
+      this.addSupport(room.id, guest, { gifts: count, diamonds: gift.diamonds });
       this.emit(room.id, 'live:gift', gift);
+    });
+    connection.on(WebcastEvent.LIKE, (data) => {
+      if (!isCurrent()) return;
+      const guest = this.upsertGuest(room.id, data.user ?? {});
+      if (!guest) return;
+      const likes = Math.max(0, Number(data.count ?? 0));
+      if (likes > 0) this.addSupport(room.id, guest, { likes });
     });
     connection.on(WebcastEvent.ROOM_USER, (data) => {
       if (!isCurrent()) return;

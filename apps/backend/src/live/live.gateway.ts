@@ -8,7 +8,12 @@ import { sessionToken } from '../auth/session';
 import { RoomsService } from './rooms.service';
 import { TikTokLiveService } from './tiktok-live.service';
 import { YouTubeLiveService } from './youtube-live.service';
-import type { KidnappingPhase, LiveGuest, RoomJoinSnapshot, RoomPresentation, SocketReply } from './live.types';
+import type { KidnappingPhase, LeaderboardLayout, LiveGuest, RoomJoinSnapshot, RoomPresentation, SocketReply, ViewMode } from './live.types';
+
+const defaultLeaderboardLayout = (): LeaderboardLayout => ({
+  desktop: { gifters: { x: 74, y: 3, scale: 100 }, likers: { x: 74, y: 24, scale: 100 } },
+  phone: { gifters: { x: 51, y: 9, scale: 100 }, likers: { x: 51, y: 29, scale: 100 } },
+});
 
 @WebSocketGateway({
   cors: {
@@ -60,6 +65,7 @@ export class LiveGateway implements OnGatewayInit, OnGatewayConnection {
   private presentationUpdate(current: RoomPresentation | undefined, value: unknown): RoomPresentation {
     const defaults: RoomPresentation = {
       viewMode: 'desktop', virtualGuestsEnabled: true, seatSpacing: 100, isRaining: false,
+      leaderboardLayout: defaultLeaderboardLayout(),
       kidnapping: { phase: 'idle', hostages: [], deadline: null },
     };
     const previous = current ?? defaults;
@@ -71,8 +77,37 @@ export class LiveGateway implements OnGatewayInit, OnGatewayConnection {
       virtualGuestsEnabled: typeof update.virtualGuestsEnabled === 'boolean' ? update.virtualGuestsEnabled : previous.virtualGuestsEnabled,
       seatSpacing: Number.isFinite(spacing) ? Math.min(100, Math.max(40, spacing)) : previous.seatSpacing,
       isRaining: typeof update.isRaining === 'boolean' ? update.isRaining : previous.isRaining,
+      leaderboardLayout: this.leaderboardLayoutUpdate(previous.leaderboardLayout, update.leaderboardLayout),
       kidnapping: this.kidnappingUpdate(previous.kidnapping, update.kidnapping),
     };
+  }
+
+  private leaderboardLayoutUpdate(current: LeaderboardLayout | undefined, value: unknown): LeaderboardLayout {
+    const previous = current ?? defaultLeaderboardLayout();
+    if (!value || typeof value !== 'object') return previous;
+    const update = value as Partial<Record<ViewMode, unknown>>;
+    const placement = (fallback: LeaderboardLayout[ViewMode]['gifters'], candidate: unknown) => {
+      if (!candidate || typeof candidate !== 'object') return fallback;
+      const item = candidate as Record<string, unknown>;
+      const clamp = (input: unknown, minimum: number, maximum: number, oldValue: number) => {
+        const numeric = Number(input);
+        return Number.isFinite(numeric) ? Math.min(maximum, Math.max(minimum, numeric)) : oldValue;
+      };
+      return {
+        x: clamp(item.x, 0, 92, fallback.x),
+        y: clamp(item.y, 0, 92, fallback.y),
+        scale: clamp(item.scale, 50, 180, fallback.scale),
+      };
+    };
+    const mode = (viewMode: ViewMode) => {
+      const candidate = update[viewMode];
+      const item = candidate && typeof candidate === 'object' ? candidate as Record<string, unknown> : {};
+      return {
+        gifters: placement(previous[viewMode].gifters, item.gifters),
+        likers: placement(previous[viewMode].likers, item.likers),
+      };
+    };
+    return { desktop: mode('desktop'), phone: mode('phone') };
   }
 
   private kidnappingUpdate(current: RoomPresentation['kidnapping'], value: unknown): RoomPresentation['kidnapping'] {
