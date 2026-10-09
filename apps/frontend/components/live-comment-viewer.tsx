@@ -22,7 +22,8 @@ type Supporter = { guestId: string; username: string; nickname: string; avatar: 
 type Leaderboard = { gifters: Supporter[]; likers: Supporter[] };
 type BoardPlacement = { x: number; y: number; scale: number };
 type LeaderboardLayout = Record<ViewMode, { gifters: BoardPlacement; likers: BoardPlacement }>;
-type RoomPresentation = { viewMode: ViewMode; virtualGuestsEnabled: boolean; virtualConversationEnabled: boolean; seatSpacing: number; isRaining: boolean; leaderboardLayout: LeaderboardLayout; kidnapping: KidnappingEvent };
+type BeachSignSettings = { text: string; visible: boolean; scale: number };
+type RoomPresentation = { viewMode: ViewMode; virtualGuestsEnabled: boolean; virtualConversationEnabled: boolean; seatSpacing: number; isRaining: boolean; leaderboardLayout: LeaderboardLayout; beachSign: BeachSignSettings; kidnapping: KidnappingEvent };
 type Snapshot = { status: Status; guests: Guest[]; comments: Comment[]; gifts: Gift[]; leaderboard?: Leaderboard; viewers: number | null; presentation?: RoomPresentation };
 type Reply<T = undefined> = { ok: boolean; message?: string; data?: T };
 type RainSettings = { automatic: boolean; maxDelayMinutes: number; durationSeconds: number };
@@ -38,9 +39,11 @@ const defaultLeaderboardLayout = (): LeaderboardLayout => ({
   desktop: { gifters: { x: 74, y: 3, scale: 100 }, likers: { x: 74, y: 24, scale: 100 } },
   phone: { gifters: { x: 51, y: 9, scale: 100 }, likers: { x: 51, y: 29, scale: 100 } },
 });
+const defaultBeachSign = (): BeachSignSettings => ({ text: 'Quán nước bãi biển online', visible: true, scale: 100 });
 const defaultPresentation = (): RoomPresentation => ({
   viewMode: 'desktop', virtualGuestsEnabled: true, virtualConversationEnabled: true, seatSpacing: 100, isRaining: false,
   leaderboardLayout: defaultLeaderboardLayout(),
+  beachSign: defaultBeachSign(),
   kidnapping: { phase: 'idle', hostages: [], deadline: null },
 });
 
@@ -217,6 +220,7 @@ function RoomScreen({ room, onBack }: { room: Room; onBack: () => void }) {
   const [seatSpacing, setSeatSpacing] = useState(100);
   const [leaderboardLayout, setLeaderboardLayout] = useState<LeaderboardLayout>(defaultLeaderboardLayout);
   const [leaderboardEditing, setLeaderboardEditing] = useState(false);
+  const [beachSign, setBeachSign] = useState<BeachSignSettings>(defaultBeachSign);
   const [rainSettings, setRainSettings] = useState<RainSettings>({ automatic: true, maxDelayMinutes: 3, durationSeconds: 45 });
   const [isRaining, setIsRaining] = useState(false);
   const [kidnappingSettings, setKidnappingSettings] = useState<KidnappingSettings>({ automatic: true, maxDelayMinutes: 5 });
@@ -305,12 +309,22 @@ function RoomScreen({ room, onBack }: { room: Room; onBack: () => void }) {
     if (savedLeaderboard) {
       try { setLeaderboardLayout(JSON.parse(savedLeaderboard) as LeaderboardLayout); } catch { /* dùng vị trí mặc định */ }
     }
+    const savedBeachSign = window.localStorage.getItem(`live-room-beach-sign-${room.id}`);
+    if (savedBeachSign) {
+      try { setBeachSign((current) => ({ ...current, ...JSON.parse(savedBeachSign) })); } catch { /* dùng bảng hiệu mặc định */ }
+    }
   }, []);
 
   useEffect(() => {
     try { window.localStorage.setItem(`live-room-leaderboard-${room.id}`, JSON.stringify(leaderboardLayout)); }
     catch { /* vẫn giữ bố cục trong phiên hiện tại */ }
   }, [leaderboardLayout, room.id]);
+
+  useEffect(() => {
+    if (room.theme !== 'beach-bar') return;
+    try { window.localStorage.setItem(`live-room-beach-sign-${room.id}`, JSON.stringify(beachSign)); }
+    catch { /* vẫn giữ bảng hiệu trong phiên hiện tại */ }
+  }, [beachSign, room.id, room.theme]);
 
   useEffect(() => {
     if (!rainSettingsSaveSkipped.current) {
@@ -412,6 +426,7 @@ function RoomScreen({ room, onBack }: { room: Room; onBack: () => void }) {
           setSeatSpacing(reply.data.presentation.seatSpacing);
           setIsRaining(reply.data.presentation.isRaining);
           setLeaderboardLayout(reply.data.presentation.leaderboardLayout ?? defaultLeaderboardLayout());
+          setBeachSign(reply.data.presentation.beachSign ?? defaultBeachSign());
           setKidnapping(reply.data.presentation.kidnapping);
         }
         setPresentationReady(true);
@@ -447,13 +462,13 @@ function RoomScreen({ room, onBack }: { room: Room; onBack: () => void }) {
   useEffect(() => {
     if (!socket || !presentationReady) return;
     const timer = window.setTimeout(() => {
-      const presentation: RoomPresentation = { viewMode, virtualGuestsEnabled, virtualConversationEnabled, seatSpacing, isRaining, leaderboardLayout, kidnapping };
+      const presentation: RoomPresentation = { viewMode, virtualGuestsEnabled, virtualConversationEnabled, seatSpacing, isRaining, leaderboardLayout, beachSign, kidnapping };
       socket.emit('room:presentation:update', { roomId: room.id, presentation }, (reply: Reply) => {
         if (!reply.ok) setError(reply.message ?? 'Không đồng bộ được màn hình phát.');
       });
     }, 50);
     return () => window.clearTimeout(timer);
-  }, [isRaining, kidnapping, leaderboardLayout, presentationReady, room.id, seatSpacing, socket, viewMode, virtualConversationEnabled, virtualGuestsEnabled]);
+  }, [beachSign, isRaining, kidnapping, leaderboardLayout, presentationReady, room.id, seatSpacing, socket, viewMode, virtualConversationEnabled, virtualGuestsEnabled]);
 
   useEffect(() => () => {
     if (stageWindowRef.current && !stageWindowRef.current.closed) stageWindowRef.current.close();
@@ -516,6 +531,18 @@ function RoomScreen({ room, onBack }: { room: Room; onBack: () => void }) {
       <div className="room-titlebar"><div><button className="back-button" onClick={onBack}>← Tất cả phòng</button><span className="eyebrow">{themeOptions.find((option) => option.id === room.theme)?.title.toLocaleUpperCase('vi-VN')} / {room.platform === 'youtube' ? `YouTube · ${room.youtubeLiveId}` : `TikTok · @${room.tiktokUsername}`}</span><h1>{room.name}</h1></div><div className="room-actions"><div className="view-mode-switch" role="group" aria-label="Chế độ hiển thị"><button type="button" className={viewMode === 'phone' ? 'active' : ''} onClick={() => changeViewMode('phone')} aria-pressed={viewMode === 'phone'}>▯ Điện thoại</button><button type="button" className={viewMode === 'desktop' ? 'active' : ''} onClick={() => changeViewMode('desktop')} aria-pressed={viewMode === 'desktop'}>▭ Desktop</button></div><div className="room-controls"><span className={`live-pill ${status.state}`}><span />{status.state === 'connected' ? 'ĐANG LIVE' : status.state === 'connecting' ? 'ĐANG KẾT NỐI' : 'CHƯA LIVE'}</span>{status.state === 'connected' ? <button className="secondary-button" onClick={disconnect}>Ngắt kết nối</button> : <button className="primary-button" disabled={status.state === 'connecting'} onClick={reconnect}>Kết nối lại</button>}</div></div></div>
       {error && <p className="notice error" role="alert">{error}</p>}
       <AudioManager room={room} onError={setError} />
+      {room.theme === 'beach-bar' && <section className="weather-controls beach-sign-controls" aria-label="Tùy chỉnh bảng hiệu bãi biển">
+        <div className="weather-heading"><span className="weather-icon" aria-hidden="true">🏝️</span><div><span className="eyebrow">BẢNG HIỆU BÃI BIỂN</span><strong>Tùy chỉnh tên quán hiển thị trên background</strong></div></div>
+        <label className="beach-sign-text">Nội dung
+          <input type="text" maxLength={40} value={beachSign.text} onChange={(event) => setBeachSign((current) => ({ ...current, text: event.target.value.slice(0, 40) }))} placeholder="Quán nước bãi biển online" />
+        </label>
+        <label className="leaderboard-size">Kích thước
+          <input type="range" min="60" max="160" step="5" value={beachSign.scale} onChange={(event) => setBeachSign((current) => ({ ...current, scale: Number(event.target.value) }))} />
+          <output>{beachSign.scale}%</output>
+        </label>
+        <label className="weather-toggle"><input type="checkbox" checked={beachSign.visible} onChange={(event) => setBeachSign((current) => ({ ...current, visible: event.target.checked }))} /><span /> Hiện bảng hiệu</label>
+        <button type="button" className="secondary-button" onClick={() => setBeachSign(defaultBeachSign())}>Mặc định</button>
+      </section>}
       <section className="weather-controls" aria-label="Bố trí chỗ ngồi">
         <div className="weather-heading"><span className="weather-icon" aria-hidden="true">🪑</span><div><span className="eyebrow">CHỖ NGỒI</span><strong>Điều chỉnh khoảng cách giữa các khách</strong></div></div>
         <label className="seat-spacing-control" htmlFor="seat-spacing">Khoảng cách
@@ -553,7 +580,7 @@ function RoomScreen({ room, onBack }: { room: Room; onBack: () => void }) {
         <button type="button" className="danger-button" disabled={kidnapping.phase !== 'idle' || guests.length < 2} onClick={startKidnapping}>{room.theme === 'beach-bar' ? '🚤' : '🚐'} Bắt cóc ngay</button>
       </section>}
       <div className={`room-layout ${viewMode}-view`}>
-        <div className="scene-column"><div className="stream-stage"><Scene theme={room.theme} guests={guests} comments={comments} gifts={gifts} leaderboard={leaderboard} leaderboardLayout={leaderboardLayout} leaderboardEditing={leaderboardEditing} onLeaderboardPlacementChange={changeBoardPlacement} viewMode={viewMode} isRaining={isRaining} kidnapping={kidnapping} showYouTubeJoinNotice={room.platform === 'youtube'} virtualGuestsEnabled={virtualGuestsEnabled} virtualConversationEnabled={virtualConversationEnabled} seatSpacing={seatSpacing} /></div><div className="scene-footer"><span><i className="status-dot" />{status.message}</span><span>{room.platform === 'youtube' ? 'YouTube LIVE' : `${viewers === null ? '—' : viewers.toLocaleString('vi-VN')} người xem TikTok`} · {guests.length} khách LIVE{virtualGuestsEnabled ? ` · 10 khách ảo${virtualConversationEnabled ? ' đang trò chuyện' : ''}` : ''}</span><button type="button" className="fullscreen-button" onClick={openPresentationWindow}>⛶ Mở màn hình LIVE</button></div></div>
+        <div className="scene-column"><div className="stream-stage"><Scene theme={room.theme} guests={guests} comments={comments} gifts={gifts} leaderboard={leaderboard} leaderboardLayout={leaderboardLayout} leaderboardEditing={leaderboardEditing} onLeaderboardPlacementChange={changeBoardPlacement} beachSign={beachSign} viewMode={viewMode} isRaining={isRaining} kidnapping={kidnapping} showYouTubeJoinNotice={room.platform === 'youtube'} virtualGuestsEnabled={virtualGuestsEnabled} virtualConversationEnabled={virtualConversationEnabled} seatSpacing={seatSpacing} /></div><div className="scene-footer"><span><i className="status-dot" />{status.message}</span><span>{room.platform === 'youtube' ? 'YouTube LIVE' : `${viewers === null ? '—' : viewers.toLocaleString('vi-VN')} người xem TikTok`} · {guests.length} khách LIVE{virtualGuestsEnabled ? ` · 10 khách ảo${virtualConversationEnabled ? ' đang trò chuyện' : ''}` : ''}</span><button type="button" className="fullscreen-button" onClick={openPresentationWindow}>⛶ Mở màn hình LIVE</button></div></div>
         <aside className="chat-panel"><div className="chat-head"><div><span className="eyebrow">CUỘC TRÒ CHUYỆN</span><h2>Bình luận LIVE</h2></div><span className="chat-count">{comments.length}</span></div><div className="chat-list">{comments.length ? comments.map((comment) => <div className="chat-line" key={comment.id}><Avatar avatar={comment.avatar} name={comment.nickname} /><div><div className="chat-meta"><strong>{comment.nickname}</strong><time>{new Date(comment.timestamp).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}</time></div><p>{comment.comment}</p></div></div>) : <div className="chat-empty"><span>💬</span><strong>Chưa có lời nhắn</strong><p>Khi có bình luận, bong bóng chat sẽ hiện trên nhân vật trong quán.</p></div>}</div><div className="chat-foot">Tin nhắn được lấy trực tiếp từ {room.platform === 'youtube' ? 'YouTube' : 'TikTok'} LIVE</div></aside>
       </div>
     </main>
@@ -636,7 +663,7 @@ export function LiveStageViewer({ roomId }: { roomId: string }) {
 
   return <main className={`presentation-page ${presentation.viewMode}-view`}>
     <div className="stream-stage presentation-stream-stage">
-      <Scene theme={room.theme} guests={guests} comments={comments} gifts={gifts} leaderboard={leaderboard} leaderboardLayout={presentation.leaderboardLayout ?? defaultLeaderboardLayout()} viewMode={presentation.viewMode} isRaining={presentation.isRaining} kidnapping={presentation.kidnapping} showYouTubeJoinNotice={room.platform === 'youtube'} virtualGuestsEnabled={presentation.virtualGuestsEnabled} virtualConversationEnabled={presentation.virtualConversationEnabled ?? true} seatSpacing={presentation.seatSpacing} />
+      <Scene theme={room.theme} guests={guests} comments={comments} gifts={gifts} leaderboard={leaderboard} leaderboardLayout={presentation.leaderboardLayout ?? defaultLeaderboardLayout()} beachSign={presentation.beachSign ?? defaultBeachSign()} viewMode={presentation.viewMode} isRaining={presentation.isRaining} kidnapping={presentation.kidnapping} showYouTubeJoinNotice={room.platform === 'youtube'} virtualGuestsEnabled={presentation.virtualGuestsEnabled} virtualConversationEnabled={presentation.virtualConversationEnabled ?? true} seatSpacing={presentation.seatSpacing} />
     </div>
     {needsFullscreen && <button type="button" className="enter-fullscreen-button" onClick={() => void enterFullscreen()}><span>⛶</span><strong>Vào toàn màn hình</strong><small>Trình duyệt cần bạn xác nhận một lần</small></button>}
   </main>;
@@ -985,7 +1012,7 @@ function LiveLeaderboard({ leaderboard, layout, viewMode, editing, allowLikes, o
   </>;
 }
 
-function Scene({ theme, guests, comments, gifts, leaderboard, leaderboardLayout, leaderboardEditing = false, onLeaderboardPlacementChange, viewMode, isRaining, kidnapping, showYouTubeJoinNotice, virtualGuestsEnabled, virtualConversationEnabled, seatSpacing }: { theme: Theme; guests: Guest[]; comments: Comment[]; gifts: Gift[]; leaderboard: Leaderboard; leaderboardLayout: LeaderboardLayout; leaderboardEditing?: boolean; onLeaderboardPlacementChange?: (board: 'gifters' | 'likers', placement: BoardPlacement) => void; viewMode: ViewMode; isRaining: boolean; kidnapping: KidnappingEvent; showYouTubeJoinNotice: boolean; virtualGuestsEnabled: boolean; virtualConversationEnabled: boolean; seatSpacing: number }) {
+function Scene({ theme, guests, comments, gifts, leaderboard, leaderboardLayout, leaderboardEditing = false, onLeaderboardPlacementChange, beachSign, viewMode, isRaining, kidnapping, showYouTubeJoinNotice, virtualGuestsEnabled, virtualConversationEnabled, seatSpacing }: { theme: Theme; guests: Guest[]; comments: Comment[]; gifts: Gift[]; leaderboard: Leaderboard; leaderboardLayout: LeaderboardLayout; leaderboardEditing?: boolean; onLeaderboardPlacementChange?: (board: 'gifters' | 'likers', placement: BoardPlacement) => void; beachSign: BeachSignSettings; viewMode: ViewMode; isRaining: boolean; kidnapping: KidnappingEvent; showYouTubeJoinNotice: boolean; virtualGuestsEnabled: boolean; virtualConversationEnabled: boolean; seatSpacing: number }) {
   const [now, setNow] = useState(Date.now());
   useEffect(() => { const timer = window.setInterval(() => setNow(Date.now()), 500); return () => clearInterval(timer); }, []);
   const dialogues = theme === 'beach-bar' ? beachStaffDialogues : staffDialogues;
@@ -1002,6 +1029,9 @@ function Scene({ theme, guests, comments, gifts, leaderboard, leaderboardLayout,
   return <div className={`scene ${theme} scene-${viewMode} crowd-${crowdDensity}`}>
     {showYouTubeJoinNotice && <div className="youtube-join-notice"><span aria-hidden="true">💬</span> bình luận bất kỳ để vào quán</div>}
     {(leaderboard.gifters.length > 0 || leaderboard.likers.length > 0 || leaderboardEditing) && <LiveLeaderboard leaderboard={leaderboard} layout={leaderboardLayout} viewMode={viewMode} editing={leaderboardEditing} allowLikes={!showYouTubeJoinNotice} onChange={onLeaderboardPlacementChange} />}
+    {theme === 'beach-bar' && beachSign.visible && <div className="beach-shop-sign" style={{ '--beach-sign-scale': beachSign.scale / 100 } as CSSProperties} aria-label={`Bảng hiệu: ${beachSign.text}`}>
+      <span aria-hidden="true">🌺</span><strong>{beachSign.text || 'Quán nước bãi biển online'}</strong><span aria-hidden="true">🥥</span>
+    </div>}
     <div className="scene-sky"><span className="moon" /><span className="star star-one">✦</span><span className="star star-two">✧</span><span className="star star-three">✦</span></div>
     <div className="shop-front"><div className="shop-roof" /><div className="shop-sign">{theme === 'sidewalk-cafe' ? 'CÀ PHÊ · GÓC PHỐ' : 'PHÒNG TRÀ · ĐÊM NAY'}</div><div className="shop-awning" /><div className="shop-window"><span>☕</span></div><div className="shop-door"><div className="door-glow" /></div><div className="shop-window second"><span>{theme === 'sidewalk-cafe' ? '✳' : '♫'}</span></div></div>
     <div className="scene-lamps"><div className="lamp left" /><div className="lamp right" /></div>

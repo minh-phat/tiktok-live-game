@@ -112,6 +112,7 @@ try {
         desktop: { gifters: { x: 70, y: 4, scale: 110 }, likers: { x: 70, y: 28, scale: 95 } },
         phone: { gifters: { x: 45, y: 8, scale: 90 }, likers: { x: 45, y: 30, scale: 85 } },
       },
+      beachSign: { text: 'Biển xanh', visible: true, scale: 115 },
       kidnapping: { phase: 'idle', hostages: [], deadline: null },
     };
     const updatedPresentation = await emit(ownerSocket, 'room:presentation:update', { roomId, presentation });

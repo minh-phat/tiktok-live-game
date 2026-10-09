@@ -548,6 +548,22 @@ input::placeholder {
   color: var(--gold);
   font-variant-numeric: tabular-nums;
 }
+.beach-sign-text {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  color: #aeb9b6;
+  font-size: 11px;
+  font-weight: 700;
+}
+.beach-sign-text input {
+  width: min(280px, 34vw);
+  padding: 8px 10px;
+  border: 1px solid #6d5a3e;
+  border-radius: 9px;
+  background: #171b19;
+  color: #f5e5c1;
+}
 .leaderboard-controls .secondary-button.active {
   border-color: var(--gold);
   background: #4a3820;
@@ -2599,6 +2615,69 @@ input::placeholder {
 .beach-bar .street-line,
 .beach-bar .guest-chair {
   display: none;
+}
+.beach-shop-sign {
+  position: absolute;
+  z-index: 24;
+  left: 50%;
+  top: 2.6%;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  width: min(430px, 38%);
+  min-height: 8.5%;
+  padding: .7cqw 1.35cqw;
+  border: .35cqw solid #583416;
+  border-radius: 7px 7px 14px 14px;
+  background:
+    linear-gradient(90deg, #ffffff0c 1px, transparent 1px) 0 0 / 17% 100%,
+    linear-gradient(180deg, #b87935, #7d461d 52%, #633514);
+  color: #fff1bd;
+  box-shadow: inset 0 0 0 2px #d9a65c88, inset 0 -8px 14px #3e210d66, 0 8px 12px #3b210e88;
+  text-align: center;
+  text-transform: uppercase;
+  transform: translateX(-50%) scale(var(--beach-sign-scale, 1));
+  transform-origin: top center;
+}
+.beach-shop-sign:before,
+.beach-shop-sign:after {
+  content: "";
+  position: absolute;
+  bottom: 100%;
+  width: 3px;
+  height: 42%;
+  background: repeating-linear-gradient(0deg, #684018 0 3px, #c58b42 3px 5px);
+  box-shadow: 1px 0 #3f2711;
+}
+.beach-shop-sign:before { left: 15%; }
+.beach-shop-sign:after { right: 15%; }
+.beach-shop-sign strong {
+  overflow: hidden;
+  font-family: "Space Grotesk", sans-serif;
+  font-size: clamp(9px, 1.45cqw, 21px);
+  font-weight: 900;
+  letter-spacing: .08em;
+  line-height: 1.15;
+  text-shadow: 0 2px #4a260e, 1px 0 #4a260e;
+}
+.beach-shop-sign > span {
+  font-size: clamp(10px, 1.65cqw, 23px);
+  filter: drop-shadow(0 2px 1px #48260e);
+}
+.beach-bar.scene-phone .beach-shop-sign {
+  top: 5.8%;
+  gap: 5px;
+  width: 69%;
+  min-height: 4.8%;
+  padding: 1.3cqw 2cqw;
+  border-width: .65cqw;
+}
+.beach-bar.scene-phone .beach-shop-sign strong {
+  font-size: clamp(9px, 3cqw, 15px);
+}
+.beach-bar.scene-phone .beach-shop-sign > span {
+  font-size: clamp(10px, 3.4cqw, 17px);
 }
 .beach-character {
   display: block;

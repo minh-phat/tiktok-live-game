@@ -8,12 +8,13 @@ import { sessionToken } from '../auth/session';
 import { RoomsService } from './rooms.service';
 import { TikTokLiveService } from './tiktok-live.service';
 import { YouTubeLiveService } from './youtube-live.service';
-import type { KidnappingPhase, LeaderboardLayout, LiveGuest, RoomJoinSnapshot, RoomPresentation, SocketReply, ViewMode } from './live.types';
+import type { BeachSignSettings, KidnappingPhase, LeaderboardLayout, LiveGuest, RoomJoinSnapshot, RoomPresentation, SocketReply, ViewMode } from './live.types';
 
 const defaultLeaderboardLayout = (): LeaderboardLayout => ({
   desktop: { gifters: { x: 74, y: 3, scale: 100 }, likers: { x: 74, y: 24, scale: 100 } },
   phone: { gifters: { x: 51, y: 9, scale: 100 }, likers: { x: 51, y: 29, scale: 100 } },
 });
+const defaultBeachSign = (): BeachSignSettings => ({ text: 'Quán nước bãi biển online', visible: true, scale: 100 });
 
 @WebSocketGateway({
   cors: {
@@ -66,6 +67,7 @@ export class LiveGateway implements OnGatewayInit, OnGatewayConnection {
     const defaults: RoomPresentation = {
       viewMode: 'desktop', virtualGuestsEnabled: true, virtualConversationEnabled: true, seatSpacing: 100, isRaining: false,
       leaderboardLayout: defaultLeaderboardLayout(),
+      beachSign: defaultBeachSign(),
       kidnapping: { phase: 'idle', hostages: [], deadline: null },
     };
     const previous = current ?? defaults;
@@ -79,7 +81,21 @@ export class LiveGateway implements OnGatewayInit, OnGatewayConnection {
       seatSpacing: Number.isFinite(spacing) ? Math.min(100, Math.max(40, spacing)) : previous.seatSpacing,
       isRaining: typeof update.isRaining === 'boolean' ? update.isRaining : previous.isRaining,
       leaderboardLayout: this.leaderboardLayoutUpdate(previous.leaderboardLayout, update.leaderboardLayout),
+      beachSign: this.beachSignUpdate(previous.beachSign, update.beachSign),
       kidnapping: this.kidnappingUpdate(previous.kidnapping, update.kidnapping),
+    };
+  }
+
+  private beachSignUpdate(current: BeachSignSettings | undefined, value: unknown): BeachSignSettings {
+    const previous = current ?? defaultBeachSign();
+    if (!value || typeof value !== 'object') return previous;
+    const update = value as Record<string, unknown>;
+    const text = typeof update.text === 'string' ? update.text.trim().slice(0, 40) : previous.text;
+    const numericScale = Number(update.scale);
+    return {
+      text: text || previous.text,
+      visible: typeof update.visible === 'boolean' ? update.visible : previous.visible,
+      scale: Number.isFinite(numericScale) ? Math.min(160, Math.max(60, numericScale)) : previous.scale,
     };
   }
 

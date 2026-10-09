@@ -188,7 +188,7 @@ test('gateway routes by persisted platform and checks ownership for both provide
   assert.deepEqual(calls, ['youtube:connect', 'youtube:disconnect', 'tiktok:connect', 'tiktok:disconnect']);
 });
 
-test('gateway validates leaderboard positions and sizes before broadcasting them', async () => {
+test('gateway validates presentation customizations before broadcasting them', async () => {
   const provider = { snapshot: () => ({}), connect: async () => {}, disconnect: () => {}, publicError: () => '' };
   const gateway = new LiveGateway({ getUser: async () => ({ id: 'owner' }) }, {
     get: async () => ({ id: 'room', platform: 'tiktok' }),
@@ -203,10 +203,14 @@ test('gateway validates leaderboard positions and sizes before broadcasting them
         desktop: { gifters: { x: 999, y: -5, scale: 10 }, likers: { x: 22, y: 33, scale: 140 } },
         phone: { gifters: { x: 44, y: 12, scale: 120 }, likers: { x: 55, y: 40, scale: 90 } },
       },
+      beachSign: { text: `  ${'Bãi biển '.repeat(10)}  `, visible: false, scale: 999 },
     },
   });
   assert.equal(reply.ok, true);
   assert.deepEqual(reply.data.leaderboardLayout.desktop.gifters, { x: 92, y: 0, scale: 50 });
   assert.deepEqual(reply.data.leaderboardLayout.desktop.likers, { x: 22, y: 33, scale: 140 });
+  assert.equal(reply.data.beachSign.text.length, 40);
+  assert.equal(reply.data.beachSign.visible, false);
+  assert.equal(reply.data.beachSign.scale, 160);
   assert.equal(broadcasts.length, 1);
 });

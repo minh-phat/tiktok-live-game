@@ -108,6 +108,12 @@ export type LeaderboardLayout = Record<ViewMode, {
   likers: LeaderboardPlacement;
 }>;
 
+export interface BeachSignSettings {
+  text: string;
+  visible: boolean;
+  scale: number;
+}
+
 export interface RoomPresentation {
   viewMode: ViewMode;
   virtualGuestsEnabled: boolean;
@@ -115,6 +121,7 @@ export interface RoomPresentation {
   seatSpacing: number;
   isRaining: boolean;
   leaderboardLayout: LeaderboardLayout;
+  beachSign: BeachSignSettings;
   kidnapping: {
     phase: KidnappingPhase;
     hostages: LiveGuest[];
