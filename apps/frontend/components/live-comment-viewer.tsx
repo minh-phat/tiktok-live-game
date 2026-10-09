@@ -14,7 +14,8 @@ type Room = { id: string; name: string; theme: Theme; platform?: LivePlatform; t
 type Guest = { id: string; username: string; nickname: string; avatar: string; seat: number; joinedAt: number; isVirtual?: boolean };
 type Comment = { id: string; guestId: string; username: string; nickname: string; avatar: string; comment: string; timestamp: number };
 type Gift = { id: string; guestId: string; username: string; nickname: string; avatar: string; giftId: string; giftName: string; giftImage: string; count: number; diamonds: number; timestamp: number };
-type Snapshot = { status: Status; guests: Guest[]; comments: Comment[]; gifts: Gift[]; viewers: number | null };
+type RoomPresentation = { viewMode: ViewMode; virtualGuestsEnabled: boolean; seatSpacing: number; isRaining: boolean; kidnapping: KidnappingEvent };
+type Snapshot = { status: Status; guests: Guest[]; comments: Comment[]; gifts: Gift[]; viewers: number | null; presentation?: RoomPresentation };
 type Reply<T = undefined> = { ok: boolean; message?: string; data?: T };
 type RainSettings = { automatic: boolean; maxDelayMinutes: number; durationSeconds: number };
 type KidnappingSettings = { automatic: boolean; maxDelayMinutes: number };
@@ -24,6 +25,10 @@ type KidnappingEvent = { phase: KidnappingPhase; hostages: Guest[]; deadline: nu
 const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL ?? 'http://localhost:3001';
 const MAX_AUDIO_FILE_SIZE = 100 * 1024 * 1024;
 const emptyStatus: Status = { state: 'disconnected', message: 'Chưa kết nối LIVE' };
+const defaultPresentation = (): RoomPresentation => ({
+  viewMode: 'desktop', virtualGuestsEnabled: true, seatSpacing: 100, isRaining: false,
+  kidnapping: { phase: 'idle', hostages: [], deadline: null },
+});
 
 async function api<T>(path: string, method = 'GET', body?: object | FormData): Promise<T> {
   const isForm = body instanceof FormData;
@@ -197,7 +202,8 @@ function RoomScreen({ room, onBack }: { room: Room; onBack: () => void }) {
   const [isRaining, setIsRaining] = useState(false);
   const [kidnappingSettings, setKidnappingSettings] = useState<KidnappingSettings>({ automatic: true, maxDelayMinutes: 5 });
   const [kidnapping, setKidnapping] = useState<KidnappingEvent>({ phase: 'idle', hostages: [], deadline: null });
-  const stageRef = useRef<HTMLDivElement>(null);
+  const [presentationReady, setPresentationReady] = useState(false);
+  const stageWindowRef = useRef<Window | null>(null);
   const nextRainTimer = useRef<number | null>(null);
   const rainEndTimer = useRef<number | null>(null);
   const rainSettingsSaveSkipped = useRef(false);
@@ -362,6 +368,7 @@ function RoomScreen({ room, onBack }: { room: Room; onBack: () => void }) {
   useEffect(() => {
     const connection = io(backendUrl, { withCredentials: true });
     connection.on('connect', () => {
+      setPresentationReady(false);
       connection.emit('room:join', { roomId: room.id }, (reply: Reply<Snapshot>) => {
         if (!reply.ok || !reply.data) { setError(reply.message ?? 'Không vào được phòng.'); return; }
         setStatus(reply.data.status);
@@ -369,6 +376,14 @@ function RoomScreen({ room, onBack }: { room: Room; onBack: () => void }) {
         setComments(reply.data.comments);
         setGifts(reply.data.gifts ?? []);
         setViewers(reply.data.viewers);
+        if (reply.data.presentation) {
+          setViewMode(reply.data.presentation.viewMode);
+          setVirtualGuestsEnabled(reply.data.presentation.virtualGuestsEnabled);
+          setSeatSpacing(reply.data.presentation.seatSpacing);
+          setIsRaining(reply.data.presentation.isRaining);
+          setKidnapping(reply.data.presentation.kidnapping);
+        }
+        setPresentationReady(true);
         if (reply.data.status.state === 'disconnected') {
           connection.emit('live:connect', { roomId: room.id }, (result: Reply) => {
             if (!result.ok) setError(result.message ?? 'Kết nối LIVE thất bại.');
@@ -396,6 +411,18 @@ function RoomScreen({ room, onBack }: { room: Room; onBack: () => void }) {
     return () => { connection.emit('room:leave', { roomId: room.id }); connection.disconnect(); };
   }, [clearKidnappingTimers, clearNextKidnapping, room.id]);
 
+  useEffect(() => {
+    if (!socket || !presentationReady) return;
+    const presentation: RoomPresentation = { viewMode, virtualGuestsEnabled, seatSpacing, isRaining, kidnapping };
+    socket.emit('room:presentation:update', { roomId: room.id, presentation }, (reply: Reply) => {
+      if (!reply.ok) setError(reply.message ?? 'Không đồng bộ được màn hình phát.');
+    });
+  }, [isRaining, kidnapping, presentationReady, room.id, seatSpacing, socket, viewMode, virtualGuestsEnabled]);
+
+  useEffect(() => () => {
+    if (stageWindowRef.current && !stageWindowRef.current.closed) stageWindowRef.current.close();
+  }, []);
+
   function reconnect() {
     setError('');
     socket?.emit('live:connect', { roomId: room.id }, (reply: Reply) => {
@@ -416,10 +443,20 @@ function RoomScreen({ room, onBack }: { room: Room; onBack: () => void }) {
     catch { /* vẫn áp dụng khoảng cách cho phiên hiện tại */ }
   }
 
-  async function openFullscreen() {
-    if (!stageRef.current) return;
-    if (document.fullscreenElement) await document.exitFullscreen();
-    else await stageRef.current.requestFullscreen();
+  function openPresentationWindow() {
+    const width = window.screen.availWidth;
+    const height = window.screen.availHeight;
+    const popup = window.open(
+      `/stage/${encodeURIComponent(room.id)}`,
+      `live-stage-${room.id}`,
+      `popup=yes,left=0,top=0,width=${width},height=${height}`,
+    );
+    if (!popup) {
+      setError('Trình duyệt đã chặn cửa sổ màn hình phát. Hãy cho phép popup cho trang này rồi thử lại.');
+      return;
+    }
+    stageWindowRef.current = popup;
+    popup.focus();
   }
 
   return (
@@ -454,11 +491,90 @@ function RoomScreen({ room, onBack }: { room: Room; onBack: () => void }) {
         <button type="button" className="danger-button" disabled={kidnapping.phase !== 'idle' || guests.length < 2} onClick={startKidnapping}>🚐 Bắt cóc ngay</button>
       </section>}
       <div className={`room-layout ${viewMode}-view`}>
-        <div className="scene-column"><div className="stream-stage" ref={stageRef}><Scene theme={room.theme} guests={guests} comments={comments} gifts={gifts} viewMode={viewMode} isRaining={isRaining} kidnapping={kidnapping} showYouTubeJoinNotice={room.platform === 'youtube'} virtualGuestsEnabled={virtualGuestsEnabled} seatSpacing={seatSpacing} /></div><div className="scene-footer"><span><i className="status-dot" />{status.message}</span><span>{room.platform === 'youtube' ? 'YouTube LIVE' : `${viewers === null ? '—' : viewers.toLocaleString('vi-VN')} người xem TikTok`} · {guests.length} khách LIVE{virtualGuestsEnabled ? ' · 10 khách ảo' : ''}</span><button type="button" className="fullscreen-button" onClick={openFullscreen}>⛶ Toàn màn hình</button></div></div>
+        <div className="scene-column"><div className="stream-stage"><Scene theme={room.theme} guests={guests} comments={comments} gifts={gifts} viewMode={viewMode} isRaining={isRaining} kidnapping={kidnapping} showYouTubeJoinNotice={room.platform === 'youtube'} virtualGuestsEnabled={virtualGuestsEnabled} seatSpacing={seatSpacing} /></div><div className="scene-footer"><span><i className="status-dot" />{status.message}</span><span>{room.platform === 'youtube' ? 'YouTube LIVE' : `${viewers === null ? '—' : viewers.toLocaleString('vi-VN')} người xem TikTok`} · {guests.length} khách LIVE{virtualGuestsEnabled ? ' · 10 khách ảo' : ''}</span><button type="button" className="fullscreen-button" onClick={openPresentationWindow}>⛶ Mở màn hình LIVE</button></div></div>
         <aside className="chat-panel"><div className="chat-head"><div><span className="eyebrow">CUỘC TRÒ CHUYỆN</span><h2>Bình luận LIVE</h2></div><span className="chat-count">{comments.length}</span></div><div className="chat-list">{comments.length ? comments.map((comment) => <div className="chat-line" key={comment.id}><Avatar avatar={comment.avatar} name={comment.nickname} /><div><div className="chat-meta"><strong>{comment.nickname}</strong><time>{new Date(comment.timestamp).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}</time></div><p>{comment.comment}</p></div></div>) : <div className="chat-empty"><span>💬</span><strong>Chưa có lời nhắn</strong><p>Khi có bình luận, bong bóng chat sẽ hiện trên nhân vật trong quán.</p></div>}</div><div className="chat-foot">Tin nhắn được lấy trực tiếp từ {room.platform === 'youtube' ? 'YouTube' : 'TikTok'} LIVE</div></aside>
       </div>
     </main>
   );
+}
+
+export function LiveStageViewer({ roomId }: { roomId: string }) {
+  const [room, setRoom] = useState<Room | null>(null);
+  const [guests, setGuests] = useState<Guest[]>([]);
+  const [comments, setComments] = useState<Comment[]>([]);
+  const [gifts, setGifts] = useState<Gift[]>([]);
+  const [presentation, setPresentation] = useState<RoomPresentation>(defaultPresentation);
+  const [error, setError] = useState('');
+  const [needsFullscreen, setNeedsFullscreen] = useState(false);
+
+  const enterFullscreen = useCallback(async () => {
+    try {
+      if (!document.fullscreenElement) await document.documentElement.requestFullscreen();
+      setNeedsFullscreen(false);
+    } catch {
+      setNeedsFullscreen(true);
+    }
+  }, []);
+
+  useEffect(() => {
+    document.body.classList.add('presentation-body');
+    document.title = 'Màn hình LIVE';
+    const fullscreenChanged = () => setNeedsFullscreen(!document.fullscreenElement);
+    document.addEventListener('fullscreenchange', fullscreenChanged);
+    try {
+      if (window.opener) {
+        window.moveTo(0, 0);
+        window.resizeTo(window.screen.availWidth, window.screen.availHeight);
+      }
+    } catch { /* trình duyệt có thể không cho phép thay đổi kích thước popup */ }
+    const timer = window.setTimeout(() => { void enterFullscreen(); }, 100);
+    return () => {
+      window.clearTimeout(timer);
+      document.removeEventListener('fullscreenchange', fullscreenChanged);
+      document.body.classList.remove('presentation-body');
+    };
+  }, [enterFullscreen]);
+
+  useEffect(() => {
+    api<Room>(`/rooms/${encodeURIComponent(roomId)}`).then((data) => {
+      setRoom(data);
+      document.title = `${data.name} · Màn hình LIVE`;
+    }).catch((cause) => setError((cause as Error).message));
+  }, [roomId]);
+
+  useEffect(() => {
+    const connection = io(backendUrl, { withCredentials: true });
+    connection.on('connect', () => {
+      connection.emit('room:join', { roomId }, (reply: Reply<Snapshot>) => {
+        if (!reply.ok || !reply.data) {
+          setError(reply.message ?? 'Không mở được màn hình phát.');
+          return;
+        }
+        setGuests(reply.data.guests);
+        setComments(reply.data.comments);
+        setGifts(reply.data.gifts ?? []);
+        if (reply.data.presentation) setPresentation(reply.data.presentation);
+      });
+    });
+    connection.on('room:presentation', (next: RoomPresentation) => setPresentation(next));
+    connection.on('live:guest-joined', (guest: Guest) => setGuests((current) => [...current.filter((item) => item.id !== guest.id), guest]));
+    connection.on('live:guest-left', ({ id }: { id: string }) => setGuests((current) => current.filter((guest) => guest.id !== id)));
+    connection.on('live:comment', (comment: Comment) => setComments((current) => [comment, ...current].slice(0, 100)));
+    connection.on('live:gift', (gift: Gift) => setGifts((current) => [gift, ...current].slice(0, 20)));
+    connection.on('live:reset', () => { setGuests([]); setComments([]); setGifts([]); });
+    connection.on('connect_error', () => setError('Mất kết nối với máy chủ.'));
+    return () => { connection.emit('room:leave', { roomId }); connection.disconnect(); };
+  }, [roomId]);
+
+  if (error) return <main className="presentation-message" role="alert"><strong>Không thể mở màn hình LIVE</strong><span>{error}</span></main>;
+  if (!room) return <main className="presentation-message">Đang chuẩn bị màn hình LIVE…</main>;
+
+  return <main className={`presentation-page ${presentation.viewMode}-view`}>
+    <div className="stream-stage presentation-stream-stage">
+      <Scene theme={room.theme} guests={guests} comments={comments} gifts={gifts} viewMode={presentation.viewMode} isRaining={presentation.isRaining} kidnapping={presentation.kidnapping} showYouTubeJoinNotice={room.platform === 'youtube'} virtualGuestsEnabled={presentation.virtualGuestsEnabled} seatSpacing={presentation.seatSpacing} />
+    </div>
+    {needsFullscreen && <button type="button" className="enter-fullscreen-button" onClick={() => void enterFullscreen()}><span>⛶</span><strong>Vào toàn màn hình</strong><small>Trình duyệt cần bạn xác nhận một lần</small></button>}
+  </main>;
 }
 
 function AudioManager({ room, onError }: { room: Room; onError: (message: string) => void }) {

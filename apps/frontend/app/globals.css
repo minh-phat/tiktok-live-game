@@ -816,6 +816,86 @@ input::placeholder {
   left: 20px;
   right: 20px;
 }
+.presentation-body {
+  overflow: hidden;
+  background: #090a0a;
+}
+.presentation-page {
+  position: fixed;
+  z-index: 9999;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  background: #090a0a;
+}
+.presentation-stream-stage {
+  display: grid;
+  place-items: center;
+  width: 100vw;
+  height: 100vh;
+}
+.presentation-page .scene {
+  width: 100%;
+  height: 100%;
+  max-height: none;
+  min-height: 0;
+  border: 0;
+  border-radius: 0;
+}
+.presentation-page.desktop-view .scene.scene-desktop {
+  width: min(100vw, calc(100vh * 1672 / 941));
+  height: auto;
+  aspect-ratio: 1672 / 941;
+}
+.presentation-page.phone-view .scene {
+  width: min(56.25vh, 100vw);
+  height: 100vh;
+  aspect-ratio: 9/16;
+}
+.presentation-page.phone-view .stream-hud {
+  left: 50%;
+  right: auto;
+  width: min(calc(56.25vh - 32px), calc(100vw - 32px));
+  transform: translateX(-50%);
+}
+.enter-fullscreen-button {
+  position: fixed;
+  z-index: 10000;
+  inset: 0;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: 8px;
+  width: 100%;
+  border: 0;
+  background: #090a0acc;
+  color: var(--ink);
+  backdrop-filter: blur(8px);
+}
+.enter-fullscreen-button > span {
+  color: var(--gold);
+  font-size: 48px;
+}
+.enter-fullscreen-button > strong {
+  font-family: "Space Grotesk", sans-serif;
+  font-size: 22px;
+}
+.enter-fullscreen-button > small {
+  color: var(--muted);
+  font-size: 13px;
+}
+.presentation-message {
+  display: grid;
+  place-content: center;
+  gap: 10px;
+  min-height: 100vh;
+  padding: 30px;
+  background: #090a0a;
+  color: var(--muted);
+  text-align: center;
+}
+.presentation-message strong { color: #ff9c90; }
 .phone-view {
   grid-template-columns: minmax(360px, 520px) 330px;
   justify-content: center;

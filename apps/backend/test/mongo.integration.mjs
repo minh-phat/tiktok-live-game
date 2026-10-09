@@ -7,7 +7,7 @@ import { MongoClient } from 'mongodb';
 
 const require = createRequire(import.meta.url);
 const { NestFactory } = require('@nestjs/core');
-const database = `live_quan_test_${randomUUID().replaceAll('-', '')}`;
+const database = `live_test_${randomUUID().replaceAll('-', '').slice(0, 20)}`;
 process.env.MONGODB_DB = database;
 const { AppModule } = require('../dist/app.module.js');
 const mongoUri = process.env.MONGODB_URI ?? 'mongodb://127.0.0.1:27017';
@@ -41,6 +41,12 @@ async function connectSocket(base, cookie) {
 async function join(socket, roomId) {
   return new Promise((resolve, reject) => {
     socket.timeout(5000).emit('room:join', { roomId }, (error, reply) => error ? reject(error) : resolve(reply));
+  });
+}
+
+async function emit(socket, event, payload) {
+  return new Promise((resolve, reject) => {
+    socket.timeout(5000).emit(event, payload, (error, reply) => error ? reject(error) : resolve(reply));
   });
 }
 
@@ -89,6 +95,17 @@ try {
     assert.equal(youtubeSnapshot.ok, true);
     assert.match(youtubeSnapshot.data.status.message, /YouTube/);
     assert.equal((await join(otherSocket, youtube.data.id)).ok, false);
+    const presentationEvent = new Promise((resolve) => ownerSocket.once('room:presentation', resolve));
+    const presentation = {
+      viewMode: 'phone', virtualGuestsEnabled: false, seatSpacing: 65, isRaining: true,
+      kidnapping: { phase: 'idle', hostages: [], deadline: null },
+    };
+    const updatedPresentation = await emit(ownerSocket, 'room:presentation:update', { roomId, presentation });
+    assert.equal(updatedPresentation.ok, true);
+    assert.deepEqual(updatedPresentation.data, presentation);
+    assert.deepEqual(await presentationEvent, presentation);
+    assert.deepEqual((await join(ownerSocket, roomId)).data.presentation, presentation);
+    assert.equal((await emit(otherSocket, 'room:presentation:update', { roomId, presentation })).ok, false);
     const disconnected = new Promise((resolve) => ownerSocket.once('disconnect', resolve));
     assert.equal((await request(base, '/auth/logout', 'POST', undefined, owner.cookie)).status, 201);
     await disconnected;

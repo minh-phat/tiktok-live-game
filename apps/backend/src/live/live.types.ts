@@ -79,12 +79,33 @@ export interface LiveGift {
   timestamp: number;
 }
 
+export type ViewMode = 'desktop' | 'phone';
+export type KidnappingPhase = 'idle' | 'arriving' | 'rescue' | 'saved' | 'abducted';
+
+export interface RoomPresentation {
+  viewMode: ViewMode;
+  virtualGuestsEnabled: boolean;
+  seatSpacing: number;
+  isRaining: boolean;
+  kidnapping: {
+    phase: KidnappingPhase;
+    hostages: LiveGuest[];
+    deadline: number | null;
+    rescuer?: string;
+  };
+}
+
 export interface RoomSnapshot {
   status: LiveStatus;
   guests: LiveGuest[];
   comments: LiveComment[];
   gifts: LiveGift[];
   viewers: number | null;
+}
+
+export interface RoomJoinSnapshot extends RoomSnapshot {
+  // Undefined means no controller has published presentation settings yet.
+  presentation?: RoomPresentation;
 }
 
 export interface SocketReply<T = undefined> {
