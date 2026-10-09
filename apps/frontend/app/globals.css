@@ -1108,6 +1108,31 @@ input::placeholder {
   text-align: center;
   font-size: 11px;
 }
+.comment-sync-notice {
+  position: absolute;
+  z-index: 70;
+  right: 50%;
+  bottom: 2%;
+  max-width: 92%;
+  padding: 0.55em 0.9em;
+  border: 1px solid #ffffff30;
+  border-radius: 999px;
+  background: #111513d9;
+  color: #f3eee5;
+  font-size: clamp(10px, 1.35cqw, 15px);
+  font-weight: 700;
+  line-height: 1.35;
+  text-align: center;
+  white-space: nowrap;
+  box-shadow: 0 4px 18px #0005;
+  transform: translateX(50%);
+  backdrop-filter: blur(8px);
+  pointer-events: none;
+}
+.scene-phone .comment-sync-notice {
+  bottom: 1.5%;
+  font-size: clamp(9px, 2.5cqw, 13px);
+}
 .scene {
   position: relative;
   container-type: inline-size;

@@ -1098,5 +1098,6 @@ function Scene({ theme, guests, comments, gifts, leaderboard, leaderboardLayout,
         return <div className="scene-dialogue-guest" key={latest.id} style={{ left: `${left}%`, top: `${top}%`, width: guestSize.width, height: guestSize.height }}><div className="speech-bubble"><span className="speech-speaker"><strong>{latest.nickname}</strong>{!guest.isVirtual && <small>@{latest.username}</small>}</span><span className="speech-message">{latest.comment}</span></div></div>;
       })}
     </div>
+    <div className="comment-sync-notice" role="note">Bình luận có thể mất một lúc để đồng bộ.</div>
   </div>;
 }
