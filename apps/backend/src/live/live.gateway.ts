@@ -64,7 +64,7 @@ export class LiveGateway implements OnGatewayInit, OnGatewayConnection {
 
   private presentationUpdate(current: RoomPresentation | undefined, value: unknown): RoomPresentation {
     const defaults: RoomPresentation = {
-      viewMode: 'desktop', virtualGuestsEnabled: true, seatSpacing: 100, isRaining: false,
+      viewMode: 'desktop', virtualGuestsEnabled: true, virtualConversationEnabled: true, seatSpacing: 100, isRaining: false,
       leaderboardLayout: defaultLeaderboardLayout(),
       kidnapping: { phase: 'idle', hostages: [], deadline: null },
     };
@@ -75,6 +75,7 @@ export class LiveGateway implements OnGatewayInit, OnGatewayConnection {
     return {
       viewMode,
       virtualGuestsEnabled: typeof update.virtualGuestsEnabled === 'boolean' ? update.virtualGuestsEnabled : previous.virtualGuestsEnabled,
+      virtualConversationEnabled: typeof update.virtualConversationEnabled === 'boolean' ? update.virtualConversationEnabled : (previous.virtualConversationEnabled ?? true),
       seatSpacing: Number.isFinite(spacing) ? Math.min(100, Math.max(40, spacing)) : previous.seatSpacing,
       isRaining: typeof update.isRaining === 'boolean' ? update.isRaining : previous.isRaining,
       leaderboardLayout: this.leaderboardLayoutUpdate(previous.leaderboardLayout, update.leaderboardLayout),

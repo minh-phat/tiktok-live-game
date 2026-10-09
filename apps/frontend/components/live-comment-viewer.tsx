@@ -22,7 +22,7 @@ type Supporter = { guestId: string; username: string; nickname: string; avatar: 
 type Leaderboard = { gifters: Supporter[]; likers: Supporter[] };
 type BoardPlacement = { x: number; y: number; scale: number };
 type LeaderboardLayout = Record<ViewMode, { gifters: BoardPlacement; likers: BoardPlacement }>;
-type RoomPresentation = { viewMode: ViewMode; virtualGuestsEnabled: boolean; seatSpacing: number; isRaining: boolean; leaderboardLayout: LeaderboardLayout; kidnapping: KidnappingEvent };
+type RoomPresentation = { viewMode: ViewMode; virtualGuestsEnabled: boolean; virtualConversationEnabled: boolean; seatSpacing: number; isRaining: boolean; leaderboardLayout: LeaderboardLayout; kidnapping: KidnappingEvent };
 type Snapshot = { status: Status; guests: Guest[]; comments: Comment[]; gifts: Gift[]; leaderboard?: Leaderboard; viewers: number | null; presentation?: RoomPresentation };
 type Reply<T = undefined> = { ok: boolean; message?: string; data?: T };
 type RainSettings = { automatic: boolean; maxDelayMinutes: number; durationSeconds: number };
@@ -39,7 +39,7 @@ const defaultLeaderboardLayout = (): LeaderboardLayout => ({
   phone: { gifters: { x: 51, y: 9, scale: 100 }, likers: { x: 51, y: 29, scale: 100 } },
 });
 const defaultPresentation = (): RoomPresentation => ({
-  viewMode: 'desktop', virtualGuestsEnabled: true, seatSpacing: 100, isRaining: false,
+  viewMode: 'desktop', virtualGuestsEnabled: true, virtualConversationEnabled: true, seatSpacing: 100, isRaining: false,
   leaderboardLayout: defaultLeaderboardLayout(),
   kidnapping: { phase: 'idle', hostages: [], deadline: null },
 });
@@ -213,6 +213,7 @@ function RoomScreen({ room, onBack }: { room: Room; onBack: () => void }) {
   const [error, setError] = useState('');
   const [viewMode, setViewMode] = useState<ViewMode>('desktop');
   const [virtualGuestsEnabled, setVirtualGuestsEnabled] = useState(true);
+  const [virtualConversationEnabled, setVirtualConversationEnabled] = useState(true);
   const [seatSpacing, setSeatSpacing] = useState(100);
   const [leaderboardLayout, setLeaderboardLayout] = useState<LeaderboardLayout>(defaultLeaderboardLayout);
   const [leaderboardEditing, setLeaderboardEditing] = useState(false);
@@ -407,6 +408,7 @@ function RoomScreen({ room, onBack }: { room: Room; onBack: () => void }) {
         if (reply.data.presentation) {
           setViewMode(reply.data.presentation.viewMode);
           setVirtualGuestsEnabled(reply.data.presentation.virtualGuestsEnabled);
+          setVirtualConversationEnabled(reply.data.presentation.virtualConversationEnabled ?? true);
           setSeatSpacing(reply.data.presentation.seatSpacing);
           setIsRaining(reply.data.presentation.isRaining);
           setLeaderboardLayout(reply.data.presentation.leaderboardLayout ?? defaultLeaderboardLayout());
@@ -445,13 +447,13 @@ function RoomScreen({ room, onBack }: { room: Room; onBack: () => void }) {
   useEffect(() => {
     if (!socket || !presentationReady) return;
     const timer = window.setTimeout(() => {
-      const presentation: RoomPresentation = { viewMode, virtualGuestsEnabled, seatSpacing, isRaining, leaderboardLayout, kidnapping };
+      const presentation: RoomPresentation = { viewMode, virtualGuestsEnabled, virtualConversationEnabled, seatSpacing, isRaining, leaderboardLayout, kidnapping };
       socket.emit('room:presentation:update', { roomId: room.id, presentation }, (reply: Reply) => {
         if (!reply.ok) setError(reply.message ?? 'Không đồng bộ được màn hình phát.');
       });
     }, 50);
     return () => window.clearTimeout(timer);
-  }, [isRaining, kidnapping, leaderboardLayout, presentationReady, room.id, seatSpacing, socket, viewMode, virtualGuestsEnabled]);
+  }, [isRaining, kidnapping, leaderboardLayout, presentationReady, room.id, seatSpacing, socket, viewMode, virtualConversationEnabled, virtualGuestsEnabled]);
 
   useEffect(() => () => {
     if (stageWindowRef.current && !stageWindowRef.current.closed) stageWindowRef.current.close();
@@ -533,8 +535,9 @@ function RoomScreen({ room, onBack }: { room: Room; onBack: () => void }) {
         <button type="button" className="secondary-button" onClick={resetLeaderboardLayout}>Đặt lại</button>
       </section>
       <section className="weather-controls" aria-label="Khách ảo trong quán">
-        <div className="weather-heading"><span className="weather-icon" aria-hidden="true">☕</span><div><span className="eyebrow">KHÁCH ẢO</span><strong>10 khách trò chuyện tự động trong quán</strong></div></div>
+        <div className="weather-heading"><span className="weather-icon" aria-hidden="true">☕</span><div><span className="eyebrow">KHÁCH ẢO</span><strong>Điều khiển khách xuất hiện và trò chuyện tự động</strong></div></div>
         <label className="weather-toggle"><input type="checkbox" checked={virtualGuestsEnabled} onChange={(event) => setVirtualGuestsEnabled(event.target.checked)} /><span /> Bật khách ảo</label>
+        <label className="weather-toggle"><input type="checkbox" checked={virtualConversationEnabled} onChange={(event) => setVirtualConversationEnabled(event.target.checked)} disabled={!virtualGuestsEnabled} /><span /> Cho khách nói chuyện</label>
       </section>
       {hasCafeEvents(room.theme) && <section className="weather-controls" aria-label="Điều khiển thời tiết">
         <div className="weather-heading"><span className={`weather-icon ${isRaining ? 'raining' : ''}`}>{isRaining ? '🌧' : '☁'}</span><div><span className="eyebrow">THỜI TIẾT QUÁN</span><strong>{isRaining ? 'Đang mưa · bạt đã được kéo ra' : rainSettings.automatic ? `Mưa ngẫu nhiên trong tối đa ${rainSettings.maxDelayMinutes} phút` : 'Mưa tự động đang tắt'}</strong></div></div>
@@ -550,7 +553,7 @@ function RoomScreen({ room, onBack }: { room: Room; onBack: () => void }) {
         <button type="button" className="danger-button" disabled={kidnapping.phase !== 'idle' || guests.length < 2} onClick={startKidnapping}>{room.theme === 'beach-bar' ? '🚤' : '🚐'} Bắt cóc ngay</button>
       </section>}
       <div className={`room-layout ${viewMode}-view`}>
-        <div className="scene-column"><div className="stream-stage"><Scene theme={room.theme} guests={guests} comments={comments} gifts={gifts} leaderboard={leaderboard} leaderboardLayout={leaderboardLayout} leaderboardEditing={leaderboardEditing} onLeaderboardPlacementChange={changeBoardPlacement} viewMode={viewMode} isRaining={isRaining} kidnapping={kidnapping} showYouTubeJoinNotice={room.platform === 'youtube'} virtualGuestsEnabled={virtualGuestsEnabled} seatSpacing={seatSpacing} /></div><div className="scene-footer"><span><i className="status-dot" />{status.message}</span><span>{room.platform === 'youtube' ? 'YouTube LIVE' : `${viewers === null ? '—' : viewers.toLocaleString('vi-VN')} người xem TikTok`} · {guests.length} khách LIVE{virtualGuestsEnabled ? ' · 10 khách ảo' : ''}</span><button type="button" className="fullscreen-button" onClick={openPresentationWindow}>⛶ Mở màn hình LIVE</button></div></div>
+        <div className="scene-column"><div className="stream-stage"><Scene theme={room.theme} guests={guests} comments={comments} gifts={gifts} leaderboard={leaderboard} leaderboardLayout={leaderboardLayout} leaderboardEditing={leaderboardEditing} onLeaderboardPlacementChange={changeBoardPlacement} viewMode={viewMode} isRaining={isRaining} kidnapping={kidnapping} showYouTubeJoinNotice={room.platform === 'youtube'} virtualGuestsEnabled={virtualGuestsEnabled} virtualConversationEnabled={virtualConversationEnabled} seatSpacing={seatSpacing} /></div><div className="scene-footer"><span><i className="status-dot" />{status.message}</span><span>{room.platform === 'youtube' ? 'YouTube LIVE' : `${viewers === null ? '—' : viewers.toLocaleString('vi-VN')} người xem TikTok`} · {guests.length} khách LIVE{virtualGuestsEnabled ? ` · 10 khách ảo${virtualConversationEnabled ? ' đang trò chuyện' : ''}` : ''}</span><button type="button" className="fullscreen-button" onClick={openPresentationWindow}>⛶ Mở màn hình LIVE</button></div></div>
         <aside className="chat-panel"><div className="chat-head"><div><span className="eyebrow">CUỘC TRÒ CHUYỆN</span><h2>Bình luận LIVE</h2></div><span className="chat-count">{comments.length}</span></div><div className="chat-list">{comments.length ? comments.map((comment) => <div className="chat-line" key={comment.id}><Avatar avatar={comment.avatar} name={comment.nickname} /><div><div className="chat-meta"><strong>{comment.nickname}</strong><time>{new Date(comment.timestamp).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}</time></div><p>{comment.comment}</p></div></div>) : <div className="chat-empty"><span>💬</span><strong>Chưa có lời nhắn</strong><p>Khi có bình luận, bong bóng chat sẽ hiện trên nhân vật trong quán.</p></div>}</div><div className="chat-foot">Tin nhắn được lấy trực tiếp từ {room.platform === 'youtube' ? 'YouTube' : 'TikTok'} LIVE</div></aside>
       </div>
     </main>
@@ -633,7 +636,7 @@ export function LiveStageViewer({ roomId }: { roomId: string }) {
 
   return <main className={`presentation-page ${presentation.viewMode}-view`}>
     <div className="stream-stage presentation-stream-stage">
-      <Scene theme={room.theme} guests={guests} comments={comments} gifts={gifts} leaderboard={leaderboard} leaderboardLayout={presentation.leaderboardLayout ?? defaultLeaderboardLayout()} viewMode={presentation.viewMode} isRaining={presentation.isRaining} kidnapping={presentation.kidnapping} showYouTubeJoinNotice={room.platform === 'youtube'} virtualGuestsEnabled={presentation.virtualGuestsEnabled} seatSpacing={presentation.seatSpacing} />
+      <Scene theme={room.theme} guests={guests} comments={comments} gifts={gifts} leaderboard={leaderboard} leaderboardLayout={presentation.leaderboardLayout ?? defaultLeaderboardLayout()} viewMode={presentation.viewMode} isRaining={presentation.isRaining} kidnapping={presentation.kidnapping} showYouTubeJoinNotice={room.platform === 'youtube'} virtualGuestsEnabled={presentation.virtualGuestsEnabled} virtualConversationEnabled={presentation.virtualConversationEnabled ?? true} seatSpacing={presentation.seatSpacing} />
     </div>
     {needsFullscreen && <button type="button" className="enter-fullscreen-button" onClick={() => void enterFullscreen()}><span>⛶</span><strong>Vào toàn màn hình</strong><small>Trình duyệt cần bạn xác nhận một lần</small></button>}
   </main>;
@@ -982,14 +985,14 @@ function LiveLeaderboard({ leaderboard, layout, viewMode, editing, allowLikes, o
   </>;
 }
 
-function Scene({ theme, guests, comments, gifts, leaderboard, leaderboardLayout, leaderboardEditing = false, onLeaderboardPlacementChange, viewMode, isRaining, kidnapping, showYouTubeJoinNotice, virtualGuestsEnabled, seatSpacing }: { theme: Theme; guests: Guest[]; comments: Comment[]; gifts: Gift[]; leaderboard: Leaderboard; leaderboardLayout: LeaderboardLayout; leaderboardEditing?: boolean; onLeaderboardPlacementChange?: (board: 'gifters' | 'likers', placement: BoardPlacement) => void; viewMode: ViewMode; isRaining: boolean; kidnapping: KidnappingEvent; showYouTubeJoinNotice: boolean; virtualGuestsEnabled: boolean; seatSpacing: number }) {
+function Scene({ theme, guests, comments, gifts, leaderboard, leaderboardLayout, leaderboardEditing = false, onLeaderboardPlacementChange, viewMode, isRaining, kidnapping, showYouTubeJoinNotice, virtualGuestsEnabled, virtualConversationEnabled, seatSpacing }: { theme: Theme; guests: Guest[]; comments: Comment[]; gifts: Gift[]; leaderboard: Leaderboard; leaderboardLayout: LeaderboardLayout; leaderboardEditing?: boolean; onLeaderboardPlacementChange?: (board: 'gifters' | 'likers', placement: BoardPlacement) => void; viewMode: ViewMode; isRaining: boolean; kidnapping: KidnappingEvent; showYouTubeJoinNotice: boolean; virtualGuestsEnabled: boolean; virtualConversationEnabled: boolean; seatSpacing: number }) {
   const [now, setNow] = useState(Date.now());
   useEffect(() => { const timer = window.setInterval(() => setNow(Date.now()), 500); return () => clearInterval(timer); }, []);
   const dialogues = theme === 'beach-bar' ? beachStaffDialogues : staffDialogues;
   const dialogue = dialogues[Math.floor(now / 6000) % dialogues.length];
   const showStaffBubble = now % 6000 < 5000;
   const sceneGuests = virtualGuestsEnabled ? [...guests, ...virtualGuests] : guests;
-  const virtualComment = useVirtualConversation(virtualGuestsEnabled && kidnapping.phase === 'idle');
+  const virtualComment = useVirtualConversation(virtualGuestsEnabled && virtualConversationEnabled && kidnapping.phase === 'idle');
   const crowdDensity = getCrowdDensity(sceneGuests.length);
   const guestSize = getGuestSize(viewMode, theme);
   const latestGift = gifts.find((gift) => now - gift.timestamp < 12000);

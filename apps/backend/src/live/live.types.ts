@@ -111,6 +111,7 @@ export type LeaderboardLayout = Record<ViewMode, {
 export interface RoomPresentation {
   viewMode: ViewMode;
   virtualGuestsEnabled: boolean;
+  virtualConversationEnabled: boolean;
   seatSpacing: number;
   isRaining: boolean;
   leaderboardLayout: LeaderboardLayout;

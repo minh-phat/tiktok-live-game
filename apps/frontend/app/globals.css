@@ -621,6 +621,10 @@ input::placeholder {
   opacity: 0;
   pointer-events: none;
 }
+.weather-toggle:has(input:disabled) {
+  opacity: .45;
+  cursor: not-allowed;
+}
 .weather-toggle > span {
   position: relative;
   width: 34px;
