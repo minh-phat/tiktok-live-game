@@ -1,4 +1,4 @@
-export type RoomTheme = 'sidewalk-cafe' | 'tea-room';
+export type RoomTheme = 'sidewalk-cafe' | 'tea-room' | 'beach-bar';
 export type LivePlatform = 'tiktok' | 'youtube';
 
 export interface CreateRoomInput {

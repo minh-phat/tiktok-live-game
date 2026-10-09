@@ -1,9 +1,13 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type FormEvent } from 'react';
+import { useCallback, useEffect, useId, useMemo, useRef, useState, type CSSProperties, type FormEvent } from 'react';
 import { io, type Socket } from 'socket.io-client';
 
-type Theme = 'sidewalk-cafe' | 'tea-room';
+type Theme = 'sidewalk-cafe' | 'tea-room' | 'beach-bar';
+
+function hasCafeEvents(theme: Theme) {
+  return theme === 'sidewalk-cafe' || theme === 'beach-bar';
+}
 type LivePlatform = 'tiktok' | 'youtube';
 type ViewMode = 'desktop' | 'phone';
 type Status = { state: 'connected' | 'connecting' | 'disconnected'; message: string; username?: string };
@@ -137,6 +141,7 @@ function AuthScreen({ onSuccess }: { onSuccess: (user: User) => void }) {
 
 const themeOptions: { id: Theme; icon: string; title: string; description: string }[] = [
   { id: 'sidewalk-cafe', icon: '☕', title: 'Cà phê vỉa hè', description: 'Ghế nhựa, đèn phố và câu chuyện lúc đêm.' },
+  { id: 'beach-bar', icon: '🏖️', title: 'Quán nước bãi biển', description: 'Quầy nước nhiệt đới, cát vàng và sóng biển.' },
   { id: 'tea-room', icon: '♫', title: 'Phòng trà', description: 'Ánh đèn ấm, sân khấu nhỏ và nhạc nhẹ.' },
 ];
 
@@ -181,7 +186,7 @@ function Dashboard({ rooms, onOpen, onCreated }: { rooms: Room[]; onOpen: (room:
         </form>
       </section>
       <section className="saved-rooms"><div className="section-heading"><div><span className="eyebrow">02 / PHÒNG CỦA BẠN</span><h2>Quán đã tạo</h2></div><span className="step-badge">{rooms.length} phòng</span></div>
-        {rooms.length === 0 ? <div className="empty-rooms">Chưa có phòng nào. Chọn một không gian ở trên để bắt đầu.</div> : <div className="room-grid">{rooms.map((room) => <button className="room-card" key={room.id} onClick={() => onOpen(room)}><span className="room-art">{room.theme === 'sidewalk-cafe' ? '☕' : '♫'}</span><span className="room-info"><strong>{room.name}</strong><small>{room.platform === 'youtube' ? `YouTube · ${room.youtubeLiveId}` : `TikTok · @${room.tiktokUsername}`} · {room.theme === 'sidewalk-cafe' ? 'Cà phê vỉa hè' : 'Phòng trà'}</small></span><span className="room-arrow">↗</span></button>)}</div>}
+        {rooms.length === 0 ? <div className="empty-rooms">Chưa có phòng nào. Chọn một không gian ở trên để bắt đầu.</div> : <div className="room-grid">{rooms.map((room) => <button className="room-card" key={room.id} onClick={() => onOpen(room)}><span className="room-art">{themeOptions.find((option) => option.id === room.theme)?.icon}</span><span className="room-info"><strong>{room.name}</strong><small>{room.platform === 'youtube' ? `YouTube · ${room.youtubeLiveId}` : `TikTok · @${room.tiktokUsername}`} · {themeOptions.find((option) => option.id === room.theme)?.title}</small></span><span className="room-arrow">↗</span></button>)}</div>}
       </section>
     </main>
   );
@@ -228,7 +233,7 @@ function RoomScreen({ room, onBack }: { room: Room; onBack: () => void }) {
   }, []);
 
   const startKidnapping = useCallback(() => {
-    if (room.theme !== 'sidewalk-cafe' || guests.length < 2 || kidnapping.phase !== 'idle') return;
+    if (!hasCafeEvents(room.theme) || guests.length < 2 || kidnapping.phase !== 'idle') return;
     clearNextKidnapping();
     clearKidnappingTimers();
     const hostages = [...guests].sort(() => Math.random() - 0.5).slice(0, 2);
@@ -289,7 +294,7 @@ function RoomScreen({ room, onBack }: { room: Room; onBack: () => void }) {
       rainSettingsSaveSkipped.current = true;
       return;
     }
-    if (room.theme !== 'sidewalk-cafe') return;
+    if (!hasCafeEvents(room.theme)) return;
     window.localStorage.setItem(`live-room-rain-${room.id}`, JSON.stringify(rainSettings));
   }, [rainSettings, room.id, room.theme]);
 
@@ -298,13 +303,13 @@ function RoomScreen({ room, onBack }: { room: Room; onBack: () => void }) {
       kidnappingSettingsSaveSkipped.current = true;
       return;
     }
-    if (room.theme !== 'sidewalk-cafe') return;
+    if (!hasCafeEvents(room.theme)) return;
     window.localStorage.setItem(`live-room-kidnapping-${room.id}`, JSON.stringify(kidnappingSettings));
   }, [kidnappingSettings, room.id, room.theme]);
 
   useEffect(() => {
     clearNextRain();
-    if (room.theme !== 'sidewalk-cafe' || !rainSettings.automatic || isRaining) return clearNextRain;
+    if (!hasCafeEvents(room.theme) || !rainSettings.automatic || isRaining) return clearNextRain;
     const maximum = rainSettings.maxDelayMinutes * 60 * 1000;
     const minimum = Math.min(15_000, maximum);
     const delay = minimum + Math.random() * Math.max(0, maximum - minimum);
@@ -314,7 +319,7 @@ function RoomScreen({ room, onBack }: { room: Room; onBack: () => void }) {
 
   useEffect(() => {
     clearNextKidnapping();
-    if (room.theme !== 'sidewalk-cafe' || !kidnappingSettings.automatic || kidnapping.phase !== 'idle' || guests.length < 2) return clearNextKidnapping;
+    if (!hasCafeEvents(room.theme) || !kidnappingSettings.automatic || kidnapping.phase !== 'idle' || guests.length < 2) return clearNextKidnapping;
     const maximum = kidnappingSettings.maxDelayMinutes * 60 * 1000;
     const minimum = Math.min(15_000, maximum);
     const delay = minimum + Math.random() * Math.max(0, maximum - minimum);
@@ -461,7 +466,7 @@ function RoomScreen({ room, onBack }: { room: Room; onBack: () => void }) {
 
   return (
     <main className="room-page">
-      <div className="room-titlebar"><div><button className="back-button" onClick={onBack}>← Tất cả phòng</button><span className="eyebrow">{room.theme === 'sidewalk-cafe' ? 'CÀ PHÊ VỈA HÈ' : 'PHÒNG TRÀ'} / {room.platform === 'youtube' ? `YouTube · ${room.youtubeLiveId}` : `TikTok · @${room.tiktokUsername}`}</span><h1>{room.name}</h1></div><div className="room-actions"><div className="view-mode-switch" role="group" aria-label="Chế độ hiển thị"><button type="button" className={viewMode === 'phone' ? 'active' : ''} onClick={() => changeViewMode('phone')} aria-pressed={viewMode === 'phone'}>▯ Điện thoại</button><button type="button" className={viewMode === 'desktop' ? 'active' : ''} onClick={() => changeViewMode('desktop')} aria-pressed={viewMode === 'desktop'}>▭ Desktop</button></div><div className="room-controls"><span className={`live-pill ${status.state}`}><span />{status.state === 'connected' ? 'ĐANG LIVE' : status.state === 'connecting' ? 'ĐANG KẾT NỐI' : 'CHƯA LIVE'}</span>{status.state === 'connected' ? <button className="secondary-button" onClick={disconnect}>Ngắt kết nối</button> : <button className="primary-button" disabled={status.state === 'connecting'} onClick={reconnect}>Kết nối lại</button>}</div></div></div>
+      <div className="room-titlebar"><div><button className="back-button" onClick={onBack}>← Tất cả phòng</button><span className="eyebrow">{themeOptions.find((option) => option.id === room.theme)?.title.toLocaleUpperCase('vi-VN')} / {room.platform === 'youtube' ? `YouTube · ${room.youtubeLiveId}` : `TikTok · @${room.tiktokUsername}`}</span><h1>{room.name}</h1></div><div className="room-actions"><div className="view-mode-switch" role="group" aria-label="Chế độ hiển thị"><button type="button" className={viewMode === 'phone' ? 'active' : ''} onClick={() => changeViewMode('phone')} aria-pressed={viewMode === 'phone'}>▯ Điện thoại</button><button type="button" className={viewMode === 'desktop' ? 'active' : ''} onClick={() => changeViewMode('desktop')} aria-pressed={viewMode === 'desktop'}>▭ Desktop</button></div><div className="room-controls"><span className={`live-pill ${status.state}`}><span />{status.state === 'connected' ? 'ĐANG LIVE' : status.state === 'connecting' ? 'ĐANG KẾT NỐI' : 'CHƯA LIVE'}</span>{status.state === 'connected' ? <button className="secondary-button" onClick={disconnect}>Ngắt kết nối</button> : <button className="primary-button" disabled={status.state === 'connecting'} onClick={reconnect}>Kết nối lại</button>}</div></div></div>
       {error && <p className="notice error" role="alert">{error}</p>}
       <AudioManager room={room} onError={setError} />
       <section className="weather-controls" aria-label="Bố trí chỗ ngồi">
@@ -477,14 +482,14 @@ function RoomScreen({ room, onBack }: { room: Room; onBack: () => void }) {
         <div className="weather-heading"><span className="weather-icon" aria-hidden="true">☕</span><div><span className="eyebrow">KHÁCH ẢO</span><strong>10 khách trò chuyện tự động trong quán</strong></div></div>
         <label className="weather-toggle"><input type="checkbox" checked={virtualGuestsEnabled} onChange={(event) => setVirtualGuestsEnabled(event.target.checked)} /><span /> Bật khách ảo</label>
       </section>
-      {room.theme === 'sidewalk-cafe' && <section className="weather-controls" aria-label="Điều khiển thời tiết">
+      {hasCafeEvents(room.theme) && <section className="weather-controls" aria-label="Điều khiển thời tiết">
         <div className="weather-heading"><span className={`weather-icon ${isRaining ? 'raining' : ''}`}>{isRaining ? '🌧' : '☁'}</span><div><span className="eyebrow">THỜI TIẾT QUÁN</span><strong>{isRaining ? 'Đang mưa · bạt đã được kéo ra' : rainSettings.automatic ? `Mưa ngẫu nhiên trong tối đa ${rainSettings.maxDelayMinutes} phút` : 'Mưa tự động đang tắt'}</strong></div></div>
         <label className="weather-toggle"><input type="checkbox" checked={rainSettings.automatic} onChange={(event) => setRainSettings((current) => ({ ...current, automatic: event.target.checked }))} /><span /> Mưa tự động</label>
         <label>Tối đa <input type="number" min="0.25" max="30" step="0.25" value={rainSettings.maxDelayMinutes} onChange={(event) => setRainSettings((current) => ({ ...current, maxDelayMinutes: Math.min(30, Math.max(0.25, Number(event.target.value) || 3)) }))} /> phút</label>
         <label>Kéo dài <input type="number" min="10" max="300" step="5" value={rainSettings.durationSeconds} onChange={(event) => setRainSettings((current) => ({ ...current, durationSeconds: Math.min(300, Math.max(10, Number(event.target.value) || 45)) }))} /> giây</label>
         <button type="button" className="secondary-button weather-button" onClick={() => isRaining ? stopRain() : startRain()}>{isRaining ? 'Tạnh mưa' : 'Cho mưa ngay'}</button>
       </section>}
-      {room.theme === 'sidewalk-cafe' && <section className="kidnap-controls" aria-label="Điều khiển sự kiện bắt cóc">
+      {hasCafeEvents(room.theme) && <section className="kidnap-controls" aria-label="Điều khiển sự kiện bắt cóc">
         <div className="kidnap-control-copy"><span className="kidnap-control-icon">🚨</span><div><span className="eyebrow">SỰ KIỆN QUÁN</span><strong>{kidnapping.phase === 'idle' ? (guests.length < 2 ? 'Cần ít nhất 2 khách để bắt đầu' : 'Bắt cóc 2 khách ngẫu nhiên') : 'Sự kiện bắt cóc đang diễn ra'}</strong></div></div>
         <label className="weather-toggle"><input type="checkbox" checked={kidnappingSettings.automatic} onChange={(event) => setKidnappingSettings((current) => ({ ...current, automatic: event.target.checked }))} /><span /> Tự động</label>
         <label>Tối đa <input type="number" min="0.25" max="30" step="0.25" value={kidnappingSettings.maxDelayMinutes} onChange={(event) => setKidnappingSettings((current) => ({ ...current, maxDelayMinutes: Math.min(30, Math.max(0.25, Number(event.target.value) || 5)) }))} /> phút</label>
@@ -671,7 +676,7 @@ function Avatar({ avatar, name }: { avatar: string; name: string }) {
 
 const MAX_SCENE_GUESTS = 200;
 
-function getSeatPosition(seat: number, viewMode: ViewMode, seatSpacing: number) {
+function getSeatPosition(seat: number, viewMode: ViewMode, seatSpacing: number, theme: Theme) {
   const columns = viewMode === 'phone' ? 10 : 20;
   const rows = MAX_SCENE_GUESTS / columns;
   const slot = ((seat % MAX_SCENE_GUESTS) * 73 + 19) % MAX_SCENE_GUESTS;
@@ -681,8 +686,8 @@ function getSeatPosition(seat: number, viewMode: ViewMode, seatSpacing: number) 
   const leftMax = viewMode === 'phone' ? 93 : 95;
   // Keep the bottom of every character above the curb. The desktop guest box
   // extends ~12% below its center; on mobile it extends ~5.5% below.
-  const topMin = viewMode === 'phone' ? 48 : 54;
-  const topMax = viewMode === 'phone' ? 79 : 70;
+  const topMin = theme === 'beach-bar' ? (viewMode === 'phone' ? 40 : 43) : (viewMode === 'phone' ? 48 : 54);
+  const topMax = theme === 'beach-bar' ? (viewMode === 'phone' ? 66 : 55) : (viewMode === 'phone' ? 79 : 70);
   // Compress seat coordinates around the seating area's center, preserving
   // character size, seat order, and the original safe bounds in both views.
   const scale = seatSpacing / 100;
@@ -693,7 +698,7 @@ function getSeatPosition(seat: number, viewMode: ViewMode, seatSpacing: number) 
   };
 }
 
-function getGuestSize(viewMode: ViewMode) {
+function getGuestSize(viewMode: ViewMode, theme: Theme) {
   // Keep guests in the same coordinate system as the scene instead of using
   // viewport-independent pixels. Both dimensions must be explicit because
   // every child inside this absolutely positioned box is also absolute;
@@ -702,7 +707,7 @@ function getGuestSize(viewMode: ViewMode) {
   // characters instead of shrinking them.
   return {
     width: viewMode === 'phone' ? '14%' : '10%',
-    height: viewMode === 'phone' ? '10.75%' : '24.35%',
+    height: theme === 'beach-bar' ? (viewMode === 'phone' ? '8.7%' : '20%') : (viewMode === 'phone' ? '10.75%' : '24.35%'),
   };
 }
 
@@ -725,14 +730,40 @@ const guestStyles = [
   { src: '/characters/guest-tourist.png', label: 'du lịch' },
 ] as const;
 
-function getGuestStyle(guest: Guest) {
+const beachGuestStyles = [
+  'bikini xanh ngọc', 'bikini san hô và khăn sarong', 'đồ bơi liền mảnh và mũ rộng vành',
+  'váy hoa mùa hè', 'áo khoác crochet bohemian', 'sơ mi Hawaii xanh',
+  'áo mở và quần lướt sóng', 'sơ mi linen và mũ cói', 'đồ bơi thể thao rashguard',
+  'áo ba lỗ nhiệt đới và kính râm',
+].map((label, atlasIndex) => ({ src: '/characters/beach-atlas.png', label, atlasIndex }));
+
+type CharacterStyle = { src: string; label: string; atlasIndex?: number };
+
+function CharacterSprite({ character, label }: { character: CharacterStyle; label: string }) {
+  const clipId = useId();
+  if (character.atlasIndex === undefined) return <img src={character.src} alt={label} />;
+  // Crop the atlas at render time, preserving the original transparent bitmap.
+  const columns = [0, 334, 635, 942, 1244, 1536];
+  const rows = [0, 344, 680, 1024];
+  const column = character.atlasIndex % 5;
+  const row = Math.floor(character.atlasIndex / 5);
+  return <svg className="beach-character" role="img" aria-label={label} viewBox={`${columns[column]} ${rows[row]} ${columns[column + 1] - columns[column]} ${rows[row + 1] - rows[row]}`} preserveAspectRatio="xMidYMax meet">
+    <defs><clipPath id={clipId}><rect x={columns[column]} y={rows[row]} width={columns[column + 1] - columns[column]} height={rows[row + 1] - rows[row]} /></clipPath></defs>
+    <image href={character.src} width="1536" height="1024" clipPath={`url(#${clipId})`} />
+  </svg>;
+}
+
+function getGuestStyle(guest: Guest, theme: Theme): CharacterStyle {
+  const styles = theme === 'beach-bar' ? beachGuestStyles : guestStyles;
+  // Ten demo guests showcase all ten outfits; LIVE guests keep a stable style.
+  if (theme === 'beach-bar' && guest.isVirtual) return styles[Number(guest.id.split(':')[1]) % styles.length];
   const key = `${guest.id}:${guest.joinedAt}`;
   let hash = 2166136261;
   for (let index = 0; index < key.length; index += 1) {
     hash ^= key.charCodeAt(index);
     hash = Math.imul(hash, 16777619);
   }
-  return guestStyles[(hash >>> 0) % guestStyles.length];
+  return styles[(hash >>> 0) % styles.length];
 }
 
 const staffDialogues = [
@@ -742,6 +773,15 @@ const staffDialogues = [
   { speaker: 'owner', name: 'Cô chủ Hương', message: 'Nhớ kê ghế gọn cho khách mới vào nha.' },
   { speaker: 'maid', name: 'Lan', message: 'Em mời cả nhà dùng cà phê, ngồi sát vào cho vui!' },
   { speaker: 'executive', name: 'Minh', message: 'Cà phê đen ít đường của anh đây. Chúc anh ngon miệng.' },
+] as const;
+
+const beachStaffDialogues = [
+  { speaker: 'owner', name: 'Cô chủ Hương', message: 'Lan ơi, mang nước dừa mát ra cho khách nhé!' },
+  { speaker: 'maid', name: 'Lan', message: 'Dạ, nước dừa và nước ép thơm sẵn sàng đây ạ!' },
+  { speaker: 'executive', name: 'Minh', message: 'Mời cả nhà uống nước, ngắm sóng biển nhé!' },
+  { speaker: 'owner', name: 'Cô chủ Hương', message: 'Nhớ xếp ghế trên cát cho khách mới nha.' },
+  { speaker: 'maid', name: 'Lan', message: 'Sinh tố xoài mát lạnh của chị đây ạ!' },
+  { speaker: 'executive', name: 'Minh', message: 'Gió biển mát quá, cả nhà ngồi chơi thêm nhé!' },
 ] as const;
 
 const virtualGuests: Guest[] = ['An', 'Bình', 'Chi', 'Dũng', 'Hà', 'Khoa', 'Linh', 'Nam', 'Thảo', 'Vy'].map((name, index) => ({
@@ -818,12 +858,13 @@ function useVirtualConversation(enabled: boolean) {
 function Scene({ theme, guests, comments, gifts, viewMode, isRaining, kidnapping, showYouTubeJoinNotice, virtualGuestsEnabled, seatSpacing }: { theme: Theme; guests: Guest[]; comments: Comment[]; gifts: Gift[]; viewMode: ViewMode; isRaining: boolean; kidnapping: KidnappingEvent; showYouTubeJoinNotice: boolean; virtualGuestsEnabled: boolean; seatSpacing: number }) {
   const [now, setNow] = useState(Date.now());
   useEffect(() => { const timer = window.setInterval(() => setNow(Date.now()), 500); return () => clearInterval(timer); }, []);
-  const dialogue = staffDialogues[Math.floor(now / 6000) % staffDialogues.length];
+  const dialogues = theme === 'beach-bar' ? beachStaffDialogues : staffDialogues;
+  const dialogue = dialogues[Math.floor(now / 6000) % dialogues.length];
   const showStaffBubble = now % 6000 < 5000;
   const sceneGuests = virtualGuestsEnabled ? [...guests, ...virtualGuests] : guests;
   const virtualComment = useVirtualConversation(virtualGuestsEnabled && kidnapping.phase === 'idle');
   const crowdDensity = getCrowdDensity(sceneGuests.length);
-  const guestSize = getGuestSize(viewMode);
+  const guestSize = getGuestSize(viewMode, theme);
   const latestGift = gifts.find((gift) => now - gift.timestamp < 12000);
   const hostageIds = new Set(kidnapping.hostages.map((hostage) => hostage.id));
   const hiddenHostages = kidnapping.phase === 'rescue' || kidnapping.phase === 'abducted';
@@ -834,24 +875,24 @@ function Scene({ theme, guests, comments, gifts, viewMode, isRaining, kidnapping
     <div className="shop-front"><div className="shop-roof" /><div className="shop-sign">{theme === 'sidewalk-cafe' ? 'CÀ PHÊ · GÓC PHỐ' : 'PHÒNG TRÀ · ĐÊM NAY'}</div><div className="shop-awning" /><div className="shop-window"><span>☕</span></div><div className="shop-door"><div className="door-glow" /></div><div className="shop-window second"><span>{theme === 'sidewalk-cafe' ? '✳' : '♫'}</span></div></div>
     <div className="scene-lamps"><div className="lamp left" /><div className="lamp right" /></div>
     <div className="pavement" /><div className="street-line" />
-    {theme === 'sidewalk-cafe' && isRaining && <div className="rain-weather" aria-label="Trời đang mưa">
+    {hasCafeEvents(theme) && isRaining && <div className="rain-weather" aria-label="Trời đang mưa">
       <div className="rain-darkness" />
       <div className="rain-sheet rain-sheet-back" />
       <div className="rain-splashes" />
     </div>}
-    <div className="table table-one"><span>☕</span></div><div className="table table-two"><span>☕</span></div><div className="table table-three"><span>☕</span></div>
-    {theme === 'sidewalk-cafe' && latestGift && <div className="gift-thank-board" key={latestGift.id} role="status">
+    <div className="table table-one"><span>{theme === 'beach-bar' ? '🥥' : '☕'}</span></div><div className="table table-two"><span>{theme === 'beach-bar' ? '🍹' : '☕'}</span></div><div className="table table-three"><span>{theme === 'beach-bar' ? '🥥' : '☕'}</span></div>
+    {hasCafeEvents(theme) && latestGift && <div className="gift-thank-board" key={latestGift.id} role="status">
       <span className="gift-sparkle">✦</span>
       <Avatar avatar={latestGift.avatar} name={latestGift.nickname} />
       <span className="gift-thank-copy"><small>QUÁN CẢM ƠN</small><strong>{latestGift.nickname}</strong><em>đã tặng {latestGift.giftName}{latestGift.count > 1 ? ` ×${latestGift.count}` : ''}</em></span>
       {latestGift.giftImage ? <img className="gift-image" src={latestGift.giftImage} alt={latestGift.giftName} /> : <span className="gift-fallback">🎁</span>}
     </div>}
-    {theme === 'sidewalk-cafe' && <div className="cafe-staff" aria-label="Nhân viên quán cà phê">
-      <div className="staff-member staff-owner"><img src="/characters/cafe-owner.png" alt="Cô chủ Hương đang pha cà phê" /></div>
-      <div className="staff-member staff-maid"><img src="/characters/maid-server-v2.png" alt="Lan đang phục vụ cà phê" /></div>
-      <div className="staff-member staff-executive"><img src="/characters/executive-server-v2.png" alt="Minh đang phục vụ cà phê" /></div>
+    {hasCafeEvents(theme) && <div className="cafe-staff" aria-label={theme === 'beach-bar' ? 'Nhân viên quán nước bãi biển' : 'Nhân viên quán cà phê'}>
+      <div className="staff-member staff-owner"><CharacterSprite character={{ src: theme === 'beach-bar' ? '/characters/beach-atlas.png' : '/characters/cafe-owner.png', label: 'Cô chủ Hương', atlasIndex: theme === 'beach-bar' ? 10 : undefined }} label="Cô chủ Hương đang phục vụ đồ uống" /></div>
+      <div className="staff-member staff-maid"><CharacterSprite character={{ src: theme === 'beach-bar' ? '/characters/beach-atlas.png' : '/characters/maid-server-v2.png', label: 'Lan', atlasIndex: theme === 'beach-bar' ? 11 : undefined }} label="Lan đang phục vụ đồ uống" /></div>
+      <div className="staff-member staff-executive"><CharacterSprite character={{ src: theme === 'beach-bar' ? '/characters/beach-atlas.png' : '/characters/executive-server-v2.png', label: 'Minh', atlasIndex: theme === 'beach-bar' ? 12 : undefined }} label="Minh đang phục vụ đồ uống" /></div>
     </div>}
-    {theme === 'sidewalk-cafe' && kidnapping.phase !== 'idle' && <div className={`kidnapping-event phase-${kidnapping.phase}`}>
+    {hasCafeEvents(theme) && kidnapping.phase !== 'idle' && <div className={`kidnapping-event phase-${kidnapping.phase}`}>
       <div className="kidnap-alert" role="status" aria-live="assertive">
         {kidnapping.phase === 'arriving' && <><strong>🚨 XE LẠ ĐANG TIẾN VÀO QUÁN!</strong><span>Hai kẻ bịt mặt đang xuống xe…</span></>}
         {kidnapping.phase === 'rescue' && <><strong>🆘 GIẢI CỨU CON TIN · {secondsLeft}s</strong><span>Bình luận chữ <b>“giup”</b> để cứu {kidnapping.hostages.map((guest) => guest.nickname).join(' và ')}</span></>}
@@ -860,27 +901,27 @@ function Scene({ theme, guests, comments, gifts, viewMode, isRaining, kidnapping
       </div>
       <div className="kidnap-van" aria-hidden="true"><img src="/kidnapping/van.png" alt="" /></div>
       {(kidnapping.phase === 'rescue' || kidnapping.phase === 'abducted') && kidnapping.hostages.map((hostage, index) => {
-        const position = getSeatPosition(hostage.seat, viewMode, seatSpacing);
-        const hostageStyle = getGuestStyle(hostage);
+        const position = getSeatPosition(hostage.seat, viewMode, seatSpacing, theme);
+        const hostageStyle = getGuestStyle(hostage, theme);
         return <div className={`kidnap-pursuit pursuit-${index + 1}`} key={hostage.id} style={{ '--target-left': `${position.left}%`, '--target-top': `${position.top}%`, '--pursuit-delay': `${index * 0.28}s` } as CSSProperties}>
           <div className="kidnapper-figure" aria-label={`Kẻ bắt cóc đang tiến tới ${hostage.nickname}`}><img className="kidnapper-pose pose-run" src="/kidnapping/kidnapper-run.png" alt="" /><img className="kidnapper-pose pose-grab" src="/kidnapping/kidnapper-grab.png" alt="" /><img className="kidnapper-pose pose-escort" src="/kidnapping/kidnapper-escort.png" alt="" /></div>
-          <div className="captured-guest"><div className="captured-name"><Avatar avatar={hostage.avatar} name={hostage.nickname} /><strong>{hostage.nickname}</strong></div><img src={hostageStyle.src} alt={`${hostage.nickname} bị bắt cóc`} /></div>
+          <div className="captured-guest"><div className="captured-name"><Avatar avatar={hostage.avatar} name={hostage.nickname} /><strong>{hostage.nickname}</strong></div><CharacterSprite character={hostageStyle} label={`${hostage.nickname} bị bắt cóc`} /></div>
         </div>;
       })}
     </div>}
     {sceneGuests.filter((guest) => !(hiddenHostages && hostageIds.has(guest.id))).map((guest) => {
-      const { left, top, depth } = getSeatPosition(guest.seat, viewMode, seatSpacing);
-      const guestStyle = getGuestStyle(guest);
+      const { left, top, depth } = getSeatPosition(guest.seat, viewMode, seatSpacing, theme);
+      const guestStyle = getGuestStyle(guest, theme);
       return <div className={`scene-guest chair-${Math.floor(guest.seat) % 2}`} key={guest.id} style={{ left: `${left}%`, top: `${top}%`, width: guestSize.width, height: guestSize.height, zIndex: 5 + depth }} title={`@${guest.username}`}>
         <div className="guest-name"><Avatar avatar={guest.avatar} name={guest.nickname} /><span>{guest.nickname}</span></div>
         <div className="guest-chair" />
-        <div className="guest-character"><img src={guestStyle.src} alt={`${guest.nickname} trong trang phục ${guestStyle.label}`} /></div>
+        <div className="guest-character"><CharacterSprite character={guestStyle} label={`${guest.nickname} trong trang phục ${guestStyle.label}`} /></div>
       </div>;
     })}
     {sceneGuests.length === 0 && <div className="scene-placeholder"><span>☕</span><strong>Quán đang chờ khách</strong><small>Khách vào LIVE sẽ xuống quán và tìm ghế ngồi.</small></div>}
-    {theme === 'sidewalk-cafe' && isRaining && <div className="cafe-rain-shelter" aria-hidden="true"><div className="tarp"><span className="tarp-seam seam-one" /><span className="tarp-seam seam-two" /><span className="tarp-drip drip-one" /><span className="tarp-drip drip-two" /><span className="tarp-drip drip-three" /></div><span className="tarp-pole pole-left" /><span className="tarp-pole pole-right" /></div>}
+    {hasCafeEvents(theme) && isRaining && <div className="cafe-rain-shelter" aria-hidden="true"><div className="tarp"><span className="tarp-seam seam-one" /><span className="tarp-seam seam-two" /><span className="tarp-drip drip-one" /><span className="tarp-drip drip-two" /><span className="tarp-drip drip-three" /></div><span className="tarp-pole pole-left" /><span className="tarp-pole pole-right" /></div>}
     <div className="scene-dialogue-layer">
-      {theme === 'sidewalk-cafe' && <>
+      {hasCafeEvents(theme) && <>
         <div className="staff-dialogue-anchor staff-owner">{showStaffBubble && dialogue.speaker === 'owner' && <div className="staff-bubble"><strong>{dialogue.name}</strong>{dialogue.message}</div>}</div>
         <div className="staff-dialogue-anchor staff-maid">{showStaffBubble && dialogue.speaker === 'maid' && <div className="staff-bubble"><strong>{dialogue.name}</strong>{dialogue.message}</div>}</div>
         <div className="staff-dialogue-anchor staff-executive">{showStaffBubble && dialogue.speaker === 'executive' && <div className="staff-bubble"><strong>{dialogue.name}</strong>{dialogue.message}</div>}</div>
@@ -890,7 +931,7 @@ function Scene({ theme, guests, comments, gifts, viewMode, isRaining, kidnapping
           ? (virtualComment?.guestId === guest.id ? virtualComment : null)
           : comments.find((comment) => comment.guestId === guest.id);
         if (!latest || now - latest.timestamp >= 7000) return null;
-        const { left, top } = getSeatPosition(guest.seat, viewMode, seatSpacing);
+        const { left, top } = getSeatPosition(guest.seat, viewMode, seatSpacing, theme);
         return <div className="scene-dialogue-guest" key={latest.id} style={{ left: `${left}%`, top: `${top}%`, width: guestSize.width, height: guestSize.height }}><div className="speech-bubble"><span className="speech-speaker"><strong>{latest.nickname}</strong>{!guest.isVirtual && <small>@{latest.username}</small>}</span><span className="speech-message">{latest.comment}</span></div></div>;
       })}
     </div>

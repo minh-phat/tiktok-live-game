@@ -26,7 +26,7 @@ export class RoomsService {
     const tiktokUsername = platform === 'tiktok' ? this.cleanUsername(input?.tiktokUsername) : '';
     const liveId = platform === 'youtube' ? youtubeLiveId(input?.youtubeLiveId) : '';
     if (name.length < 3 || name.length > 80) throw new BadRequestException('Tên phòng cần từ 3 đến 80 ký tự.');
-    if (theme !== 'sidewalk-cafe' && theme !== 'tea-room') throw new BadRequestException('Chủ đề phòng không hợp lệ.');
+    if (theme !== 'sidewalk-cafe' && theme !== 'tea-room' && theme !== 'beach-bar') throw new BadRequestException('Chủ đề phòng không hợp lệ.');
     if (platform === 'tiktok' && !tiktokUsername) throw new BadRequestException('Username TikTok không hợp lệ.');
     if (platform === 'youtube' && !liveId) throw new BadRequestException('Link hoặc video ID YouTube LIVE không hợp lệ. Hãy nhập link của phiên phát trực tiếp.');
     const room: LiveRoom = { id: randomUUID(), ownerId, name, theme, platform, tiktokUsername, ...(liveId ? { youtubeLiveId: liveId } : {}), createdAt: new Date().toISOString(), audio: { trackIds: [], orderMode: 'manual' } };

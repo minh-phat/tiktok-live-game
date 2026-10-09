@@ -298,7 +298,7 @@ input::placeholder {
 }
 .theme-grid {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 14px;
 }
 .theme-card {
@@ -2126,7 +2126,7 @@ input::placeholder {
     min-height: 350px;
     max-height: 450px;
   }
-  .scene:not(.scene-phone):not(.sidewalk-cafe) {
+  .scene:not(.scene-phone):not(.sidewalk-cafe):not(.beach-bar) {
     height: 600px;
   }
 }
@@ -2190,7 +2190,7 @@ input::placeholder {
   .room-controls {
     justify-content: space-between;
   }
-  .scene:not(.scene-phone):not(.sidewalk-cafe) {
+  .scene:not(.scene-phone):not(.sidewalk-cafe):not(.beach-bar) {
     height: 490px;
     min-height: 490px;
   }
@@ -2400,4 +2400,83 @@ input::placeholder {
   .audio-player audio {
     width: 100%;
   }
+}
+
+
+/* Beach room uses the same event and dialogue layers as the sidewalk cafe. */
+.beach-bar {
+  background: #f4d59a url("/scenes/beach-bar.png") center / 100% 100% no-repeat;
+  border-color: #68c6b9;
+}
+.beach-bar.scene-desktop {
+  height: auto;
+  min-height: 0;
+  aspect-ratio: 1672 / 941;
+}
+.beach-bar.scene-phone {
+  height: auto;
+  min-height: 0;
+  aspect-ratio: 9 / 16;
+  background-image: url("/scenes/beach-bar-mobile.png");
+}
+.beach-bar .scene-sky,
+.beach-bar .shop-front,
+.beach-bar .scene-lamps,
+.beach-bar .pavement,
+.beach-bar .street-line,
+.beach-bar .guest-chair {
+  display: none;
+}
+.beach-character {
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+.beach-bar .staff-member,
+.beach-bar .staff-dialogue-anchor {
+  aspect-ratio: 307 / 344;
+}
+.beach-bar .staff-owner {
+  top: 34%;
+  width: 10%;
+}
+.beach-bar .staff-owner .beach-character {
+  animation: owner-working 3.2s ease-in-out infinite;
+}
+.beach-bar .staff-maid,
+.beach-bar .staff-executive {
+  top: 30%;
+  width: 11%;
+  animation-name: beach-serving;
+}
+.beach-bar .staff-executive {
+  animation-direction: alternate-reverse;
+}
+.beach-bar.scene-phone .staff-owner { top: 29%; width: 19%; }
+.beach-bar.scene-phone .staff-maid,
+.beach-bar.scene-phone .staff-executive { width: 22%; animation-name: beach-serving-phone; }
+.beach-bar .scene-guest .guest-character {
+  animation: walk-from-chair-stack 1.5s cubic-bezier(0.2, 0.8, 0.25, 1) both;
+}
+.beach-bar .table { background: #a26c3c; border-color: #e3b77b; top: 56%; }
+.beach-bar.scene-phone .table { top: 57%; }
+.beach-bar .scene-placeholder { top: 55%; background: #154d50e8; border-color: #aeeadd; }
+.beach-bar .tarp { background-color: #3bafa4; }
+.beach-bar .captured-guest .beach-character { height: 100%; }
+@keyframes beach-serving {
+  0% { left: 8%; top: 29%; }
+  50% { left: 40%; top: 32%; }
+  100% { left: 76%; top: 29%; }
+}
+@keyframes beach-serving-phone {
+  0% { left: 5%; top: 31%; }
+  50% { left: 38%; top: 40%; }
+  100% { left: 73%; top: 31%; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .beach-bar .staff-member,
+  .beach-bar .staff-dialogue-anchor,
+  .beach-bar .staff-owner .beach-character,
+  .beach-bar .scene-guest .guest-character { animation: none; }
 }
