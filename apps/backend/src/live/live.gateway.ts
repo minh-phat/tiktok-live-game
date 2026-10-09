@@ -65,7 +65,7 @@ export class LiveGateway implements OnGatewayInit, OnGatewayConnection {
 
   private presentationUpdate(current: RoomPresentation | undefined, value: unknown): RoomPresentation {
     const defaults: RoomPresentation = {
-      viewMode: 'desktop', virtualGuestsEnabled: true, virtualConversationEnabled: true, seatSpacing: 100, isRaining: false,
+      viewMode: 'desktop', virtualGuestsEnabled: true, virtualGuestCount: 10, virtualConversationEnabled: true, seatSpacing: 100, isRaining: false,
       leaderboardLayout: defaultLeaderboardLayout(),
       beachSign: defaultBeachSign(),
       kidnapping: { phase: 'idle', hostages: [], deadline: null },
@@ -73,10 +73,12 @@ export class LiveGateway implements OnGatewayInit, OnGatewayConnection {
     const previous = current ?? defaults;
     const update = value && typeof value === 'object' ? value as Record<string, unknown> : {};
     const viewMode = update.viewMode === 'phone' || update.viewMode === 'desktop' ? update.viewMode : previous.viewMode;
+    const virtualGuestCount = Number(update.virtualGuestCount);
     const spacing = Number(update.seatSpacing);
     return {
       viewMode,
       virtualGuestsEnabled: typeof update.virtualGuestsEnabled === 'boolean' ? update.virtualGuestsEnabled : previous.virtualGuestsEnabled,
+      virtualGuestCount: Math.round(Math.min(100, Math.max(1, Number.isFinite(virtualGuestCount) ? virtualGuestCount : (previous.virtualGuestCount ?? 10)))),
       virtualConversationEnabled: typeof update.virtualConversationEnabled === 'boolean' ? update.virtualConversationEnabled : (previous.virtualConversationEnabled ?? true),
       seatSpacing: Number.isFinite(spacing) ? Math.min(100, Math.max(40, spacing)) : previous.seatSpacing,
       isRaining: typeof update.isRaining === 'boolean' ? update.isRaining : previous.isRaining,

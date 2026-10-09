@@ -117,6 +117,7 @@ export interface BeachSignSettings {
 export interface RoomPresentation {
   viewMode: ViewMode;
   virtualGuestsEnabled: boolean;
+  virtualGuestCount: number;
   virtualConversationEnabled: boolean;
   seatSpacing: number;
   isRaining: boolean;

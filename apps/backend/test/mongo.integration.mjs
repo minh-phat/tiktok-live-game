@@ -107,7 +107,7 @@ try {
     assert.equal((await join(otherSocket, youtube.data.id)).ok, false);
     const presentationEvent = new Promise((resolve) => ownerSocket.once('room:presentation', resolve));
     const presentation = {
-      viewMode: 'phone', virtualGuestsEnabled: false, virtualConversationEnabled: false, seatSpacing: 65, isRaining: true,
+      viewMode: 'phone', virtualGuestsEnabled: false, virtualGuestCount: 40, virtualConversationEnabled: false, seatSpacing: 65, isRaining: true,
       leaderboardLayout: {
         desktop: { gifters: { x: 70, y: 4, scale: 110 }, likers: { x: 70, y: 28, scale: 95 } },
         phone: { gifters: { x: 45, y: 8, scale: 90 }, likers: { x: 45, y: 30, scale: 85 } },

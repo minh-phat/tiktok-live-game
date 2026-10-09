@@ -2736,6 +2736,46 @@ input::placeholder {
 .beach-bar .scene-guest .guest-character {
   animation: walk-from-chair-stack 1.5s cubic-bezier(0.2, 0.8, 0.25, 1) both;
 }
+.scene .virtual-guest.virtual-motion-0 .guest-character {
+  animation: walk-from-chair-stack 1.5s cubic-bezier(0.2, 0.8, 0.25, 1) both, virtual-bob var(--virtual-duration) ease-in-out var(--virtual-delay) infinite;
+}
+.scene .virtual-guest.virtual-motion-1 .guest-character {
+  animation: walk-from-chair-stack 1.5s cubic-bezier(0.2, 0.8, 0.25, 1) both, virtual-sway var(--virtual-duration) ease-in-out var(--virtual-delay) infinite;
+}
+.scene .virtual-guest.virtual-motion-2 .guest-character {
+  animation: walk-from-chair-stack 1.5s cubic-bezier(0.2, 0.8, 0.25, 1) both, virtual-look-around var(--virtual-duration) ease-in-out var(--virtual-delay) infinite;
+}
+.scene .virtual-guest.virtual-motion-3 .guest-character {
+  animation: walk-from-chair-stack 1.5s cubic-bezier(0.2, 0.8, 0.25, 1) both, virtual-breathe var(--virtual-duration) ease-in-out var(--virtual-delay) infinite;
+}
+.scene .virtual-guest.virtual-motion-4 .guest-character {
+  animation: walk-from-chair-stack 1.5s cubic-bezier(0.2, 0.8, 0.25, 1) both, virtual-greet var(--virtual-duration) ease-in-out var(--virtual-delay) infinite;
+}
+@keyframes virtual-bob {
+  0%, 100% { transform: translateY(0) rotate(0); }
+  45% { transform: translateY(-3%) rotate(-1deg); }
+  60% { transform: translateY(-1%) rotate(1deg); }
+}
+@keyframes virtual-sway {
+  0%, 100% { transform: translateX(0) rotate(0); }
+  35% { transform: translateX(-2%) rotate(-1.5deg); }
+  70% { transform: translateX(2%) rotate(1.5deg); }
+}
+@keyframes virtual-look-around {
+  0%, 25%, 100% { transform: rotate(0) scaleX(1); }
+  40%, 55% { transform: rotate(-1deg) scaleX(.98); }
+  70%, 85% { transform: rotate(1deg) scaleX(1.02); }
+}
+@keyframes virtual-breathe {
+  0%, 100% { transform: translateY(0) scale(1); }
+  50% { transform: translateY(-1%) scale(1.015); }
+}
+@keyframes virtual-greet {
+  0%, 55%, 100% { transform: translateY(0) rotate(0); }
+  64% { transform: translateY(-3%) rotate(-2deg); }
+  73% { transform: translateY(-2%) rotate(2deg); }
+  82% { transform: translateY(-1%) rotate(-1deg); }
+}
 .beach-bar .table { background: #a26c3c; border-color: #e3b77b; top: 56%; }
 .beach-bar.scene-phone .table { top: 57%; }
 .beach-bar .scene-placeholder { top: 55%; background: #154d50e8; border-color: #aeeadd; }
@@ -2755,5 +2795,6 @@ input::placeholder {
   .beach-bar .staff-member,
   .beach-bar .staff-dialogue-anchor,
   .beach-bar .staff-owner .beach-character,
-  .beach-bar .scene-guest .guest-character { animation: none; }
+  .beach-bar .scene-guest .guest-character,
+  .scene .virtual-guest .guest-character { animation: none; }
 }
