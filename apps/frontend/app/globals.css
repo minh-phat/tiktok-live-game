@@ -1154,7 +1154,7 @@ input::placeholder {
 .kidnap-alert b { color: #ffe06e; font-size: 13px; }
 .phase-saved .kidnap-alert { border-color: #62d79b; background: #102b20ed; }
 .phase-saved .kidnap-alert strong { color: #8cf0b7; }
-.kidnap-van {
+.kidnap-vehicle {
   position: absolute;
   z-index: 2;
   right: -5%;
@@ -1164,7 +1164,15 @@ input::placeholder {
   filter: drop-shadow(0 12px 10px #000b);
   animation: van-arrives 1.55s cubic-bezier(.16,.78,.2,1) both;
 }
-.kidnap-van img { width: 100%; height: 100%; object-fit: contain; }
+.kidnap-vehicle img { width: 100%; height: 100%; object-fit: contain; }
+.kidnapping-by-boat .kidnap-vehicle {
+  right: -4%;
+  bottom: -4%;
+  width: 55%;
+  height: 31%;
+  filter: drop-shadow(0 8px 8px #00495f80);
+  animation-name: boat-arrives;
+}
 .kidnap-pursuit { position: absolute; z-index: 4; inset: 0; }
 .kidnapper-figure {
   position: absolute;
@@ -1191,11 +1199,20 @@ input::placeholder {
 .captured-name { position: absolute; z-index: 3; left: 50%; bottom: 94%; display: flex; align-items: center; gap: 3px; max-width: 110px; padding: 2px 5px 2px 2px; border: 1px solid #ffb15c; border-radius: 99px; background: #351919e8; color: #fff; font-size: 8px; white-space: nowrap; transform: translateX(-50%); }
 .captured-name .mini-avatar { width: 15px; height: 15px; }
 .captured-name strong { overflow: hidden; text-overflow: ellipsis; }
-.phase-abducted .kidnap-van { animation: van-leaves 1.2s ease-in both; }
+.phase-abducted .kidnap-vehicle { animation: van-leaves 1.2s ease-in both; }
 .phase-abducted .kidnap-pursuit { display: none; }
-.phase-saved .kidnap-van { animation: van-leaves 1.25s .35s ease-in both; }
+.phase-saved .kidnap-vehicle { animation: van-leaves 1.25s .35s ease-in both; }
+.kidnapping-by-boat.phase-abducted .kidnap-vehicle,
+.kidnapping-by-boat.phase-saved .kidnap-vehicle { animation-name: boat-leaves; }
 @keyframes van-arrives { from { transform: translateX(145%); } 75% { transform: translateX(-3%); } }
 @keyframes van-leaves { to { transform: translateX(150%); } }
+@keyframes boat-arrives {
+  from { transform: translate(145%, 12%) rotate(2deg); }
+  70% { transform: translate(-4%, -2%) rotate(-1deg); }
+  85% { transform: translate(-1%, 1%) rotate(.6deg); }
+  to { transform: translate(0, 0) rotate(0); }
+}
+@keyframes boat-leaves { to { transform: translate(150%, 10%) rotate(2deg); } }
 @keyframes kidnapper-route {
   0% { left: 82%; top: 73%; opacity: 0; transform: translate(-50%, -50%) scale(.8); }
   8% { opacity: 1; }
@@ -1347,7 +1364,7 @@ input::placeholder {
   .weather-icon.raining {
     animation: none;
   }
-  .kidnap-alert, .kidnap-van, .kidnapper-figure, .captured-guest,
+  .kidnap-alert, .kidnap-vehicle, .kidnapper-figure, .captured-guest,
   .kidnapper-pose { animation-duration: .01ms; animation-delay: 0s; }
 }
 
@@ -1363,7 +1380,8 @@ input::placeholder {
 .scene-phone .kidnap-alert { top: 3%; padding: 9px 10px; }
 .scene-phone .kidnap-alert strong { font-size: 11px; }
 .scene-phone .kidnap-alert span { font-size: 9px; }
-.scene-phone .kidnap-van { right: -8%; bottom: 2%; width: 72%; height: 23%; }
+.scene-phone .kidnap-vehicle { right: -8%; bottom: 2%; width: 72%; height: 23%; }
+.scene-phone .kidnapping-by-boat .kidnap-vehicle { right: -9%; bottom: -2%; width: 76%; height: 19%; }
 .scene-phone .kidnapper-figure { width: 21%; height: 23%; }
 .scene-phone .captured-guest { width: 13%; height: 11%; }
 .sidewalk-cafe .scene-sky,

@@ -493,7 +493,7 @@ function RoomScreen({ room, onBack }: { room: Room; onBack: () => void }) {
         <div className="kidnap-control-copy"><span className="kidnap-control-icon">🚨</span><div><span className="eyebrow">SỰ KIỆN QUÁN</span><strong>{kidnapping.phase === 'idle' ? (guests.length < 2 ? 'Cần ít nhất 2 khách để bắt đầu' : 'Bắt cóc 2 khách ngẫu nhiên') : 'Sự kiện bắt cóc đang diễn ra'}</strong></div></div>
         <label className="weather-toggle"><input type="checkbox" checked={kidnappingSettings.automatic} onChange={(event) => setKidnappingSettings((current) => ({ ...current, automatic: event.target.checked }))} /><span /> Tự động</label>
         <label>Tối đa <input type="number" min="0.25" max="30" step="0.25" value={kidnappingSettings.maxDelayMinutes} onChange={(event) => setKidnappingSettings((current) => ({ ...current, maxDelayMinutes: Math.min(30, Math.max(0.25, Number(event.target.value) || 5)) }))} /> phút</label>
-        <button type="button" className="danger-button" disabled={kidnapping.phase !== 'idle' || guests.length < 2} onClick={startKidnapping}>🚐 Bắt cóc ngay</button>
+        <button type="button" className="danger-button" disabled={kidnapping.phase !== 'idle' || guests.length < 2} onClick={startKidnapping}>{room.theme === 'beach-bar' ? '🚤' : '🚐'} Bắt cóc ngay</button>
       </section>}
       <div className={`room-layout ${viewMode}-view`}>
         <div className="scene-column"><div className="stream-stage"><Scene theme={room.theme} guests={guests} comments={comments} gifts={gifts} viewMode={viewMode} isRaining={isRaining} kidnapping={kidnapping} showYouTubeJoinNotice={room.platform === 'youtube'} virtualGuestsEnabled={virtualGuestsEnabled} seatSpacing={seatSpacing} /></div><div className="scene-footer"><span><i className="status-dot" />{status.message}</span><span>{room.platform === 'youtube' ? 'YouTube LIVE' : `${viewers === null ? '—' : viewers.toLocaleString('vi-VN')} người xem TikTok`} · {guests.length} khách LIVE{virtualGuestsEnabled ? ' · 10 khách ảo' : ''}</span><button type="button" className="fullscreen-button" onClick={openPresentationWindow}>⛶ Mở màn hình LIVE</button></div></div>
@@ -892,14 +892,16 @@ function Scene({ theme, guests, comments, gifts, viewMode, isRaining, kidnapping
       <div className="staff-member staff-maid"><CharacterSprite character={{ src: theme === 'beach-bar' ? '/characters/beach-atlas.png' : '/characters/maid-server-v2.png', label: 'Lan', atlasIndex: theme === 'beach-bar' ? 11 : undefined }} label="Lan đang phục vụ đồ uống" /></div>
       <div className="staff-member staff-executive"><CharacterSprite character={{ src: theme === 'beach-bar' ? '/characters/beach-atlas.png' : '/characters/executive-server-v2.png', label: 'Minh', atlasIndex: theme === 'beach-bar' ? 12 : undefined }} label="Minh đang phục vụ đồ uống" /></div>
     </div>}
-    {hasCafeEvents(theme) && kidnapping.phase !== 'idle' && <div className={`kidnapping-event phase-${kidnapping.phase}`}>
+    {hasCafeEvents(theme) && kidnapping.phase !== 'idle' && <div className={`kidnapping-event ${theme === 'beach-bar' ? 'kidnapping-by-boat' : 'kidnapping-by-van'} phase-${kidnapping.phase}`}>
       <div className="kidnap-alert" role="status" aria-live="assertive">
-        {kidnapping.phase === 'arriving' && <><strong>🚨 XE LẠ ĐANG TIẾN VÀO QUÁN!</strong><span>Hai kẻ bịt mặt đang xuống xe…</span></>}
+        {kidnapping.phase === 'arriving' && (theme === 'beach-bar'
+          ? <><strong>🚨 THUYỀN LẠ ĐANG ÁP SÁT BỜ!</strong><span>Hai kẻ bịt mặt đang nhảy khỏi thuyền…</span></>
+          : <><strong>🚨 XE LẠ ĐANG TIẾN VÀO QUÁN!</strong><span>Hai kẻ bịt mặt đang xuống xe…</span></>)}
         {kidnapping.phase === 'rescue' && <><strong>🆘 GIẢI CỨU CON TIN · {secondsLeft}s</strong><span>Bình luận chữ <b>“giup”</b> để cứu {kidnapping.hostages.map((guest) => guest.nickname).join(' và ')}</span></>}
         {kidnapping.phase === 'saved' && <><strong>✅ CON TIN ĐÃ ĐƯỢC GIẢI CỨU!</strong><span>Cảm ơn {kidnapping.rescuer} đã lên tiếng kịp thời.</span></>}
-        {kidnapping.phase === 'abducted' && <><strong>🚐 CON TIN ĐÃ BỊ ĐƯA ĐI!</strong><span>Không ai giải cứu kịp… họ sẽ quay lại sau 5 giây.</span></>}
+        {kidnapping.phase === 'abducted' && <><strong>{theme === 'beach-bar' ? '🚤' : '🚐'} CON TIN ĐÃ BỊ ĐƯA ĐI!</strong><span>Không ai giải cứu kịp… họ sẽ quay lại sau 5 giây.</span></>}
       </div>
-      <div className="kidnap-van" aria-hidden="true"><img src="/kidnapping/van.png" alt="" /></div>
+      <div className="kidnap-vehicle" aria-hidden="true"><img src={theme === 'beach-bar' ? '/kidnapping/speedboat.png' : '/kidnapping/van.png'} alt="" /></div>
       {(kidnapping.phase === 'rescue' || kidnapping.phase === 'abducted') && kidnapping.hostages.map((hostage, index) => {
         const position = getSeatPosition(hostage.seat, viewMode, seatSpacing, theme);
         const hostageStyle = getGuestStyle(hostage, theme);
