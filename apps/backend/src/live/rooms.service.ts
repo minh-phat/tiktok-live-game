@@ -24,12 +24,12 @@ export class RoomsService {
     const platform = input?.platform ?? 'tiktok';
     if (platform !== 'tiktok' && platform !== 'youtube') throw new BadRequestException('Nền tảng LIVE không hợp lệ.');
     const tiktokUsername = platform === 'tiktok' ? this.cleanUsername(input?.tiktokUsername) : '';
-    const liveId = platform === 'youtube' ? youtubeLiveId(input?.youtubeLiveId) : '';
+    const youtubeSource = platform === 'youtube' ? youtubeLiveId(input?.youtubeLiveId) : '';
     if (name.length < 3 || name.length > 80) throw new BadRequestException('Tên phòng cần từ 3 đến 80 ký tự.');
     if (theme !== 'sidewalk-cafe' && theme !== 'tea-room' && theme !== 'beach-bar') throw new BadRequestException('Chủ đề phòng không hợp lệ.');
     if (platform === 'tiktok' && !tiktokUsername) throw new BadRequestException('Username TikTok không hợp lệ.');
-    if (platform === 'youtube' && !liveId) throw new BadRequestException('Link hoặc video ID YouTube LIVE không hợp lệ. Hãy nhập link của phiên phát trực tiếp.');
-    const room: LiveRoom = { id: randomUUID(), ownerId, name, theme, platform, tiktokUsername, ...(liveId ? { youtubeLiveId: liveId } : {}), createdAt: new Date().toISOString(), audio: { trackIds: [], orderMode: 'manual' } };
+    if (platform === 'youtube' && !youtubeSource) throw new BadRequestException('Handle, link kênh hoặc link/video ID YouTube LIVE không hợp lệ.');
+    const room: LiveRoom = { id: randomUUID(), ownerId, name, theme, platform, tiktokUsername, ...(youtubeSource ? { youtubeLiveId: youtubeSource } : {}), createdAt: new Date().toISOString(), audio: { trackIds: [], orderMode: 'manual' } };
     await this.store.rooms.insertOne(room);
     return room;
   }

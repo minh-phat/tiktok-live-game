@@ -129,29 +129,30 @@ export class YouTubeLiveService implements OnModuleDestroy {
 
   async connect(room: LiveRoom) {
     this.disconnect(room.id, 'Đang chuẩn bị kết nối YouTube...');
-    const liveId = youtubeLiveId(room.youtubeLiveId);
-    if (!liveId) {
-      const error = new Error('invalid YouTube video ID');
+    const source = youtubeLiveId(room.youtubeLiveId);
+    if (!source) {
+      const error = new Error('invalid YouTube source');
       this.disconnect(room.id, this.publicError(error));
       throw error;
     }
     const session = this.session(room.id);
     // Select Live chat rather than YouTube's filtered Top chat.
-    const connection = new LiveChat({ liveId }, 5000, 'live');
+    const target = source.startsWith('@') ? { handle: source } : { liveId: source };
+    const connection = new LiveChat(target, 5000, 'live');
     session.connection = connection;
     const isCurrent = () => session.connection === connection;
     let lastError: unknown;
-    this.setStatus(room.id, { state: 'connecting', roomId: liveId, message: `Đang kết nối YouTube LIVE ${liveId}...` });
-    connection.on('start', () => {
+    this.setStatus(room.id, { state: 'connecting', roomId: source, message: `Đang kết nối YouTube LIVE ${source}...` });
+    connection.on('start', (liveId) => {
       // stop() during start() cannot cancel the library's pending page fetch.
       if (!isCurrent()) { connection.stop(); return; }
-      this.setStatus(room.id, { state: 'connected', roomId: liveId, message: `Đã kết nối YouTube LIVE ${liveId}` });
+      this.setStatus(room.id, { state: 'connected', roomId: liveId, message: `Đã kết nối YouTube LIVE ${source}` });
     });
     connection.on('chat', (item) => {
       if (!isCurrent()) return;
       if (lastError) {
         lastError = undefined;
-        this.setStatus(room.id, { state: 'connected', roomId: liveId, message: `Đã kết nối YouTube LIVE ${liveId}` });
+        this.setStatus(room.id, { state: 'connected', roomId: connection.liveId ?? source, message: `Đã kết nối YouTube LIVE ${source}` });
       }
       this.receive(room.id, item);
     });
@@ -160,7 +161,7 @@ export class YouTubeLiveService implements OnModuleDestroy {
       lastError = error;
       this.logger.warn(error instanceof Error ? error.message : String(error));
       if (session.snapshot.status.state === 'connected') {
-        this.setStatus(room.id, { state: 'connected', roomId: liveId, message: `${this.publicError(error)} Đang chờ thư viện thử lại.` });
+        this.setStatus(room.id, { state: 'connected', roomId: connection.liveId ?? source, message: `${this.publicError(error)} Đang chờ thư viện thử lại.` });
       }
     });
     connection.on('end', (reason) => {

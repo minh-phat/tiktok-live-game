@@ -33,13 +33,16 @@ function chat(id = 'msg-1', channelId = 'UC-viewer') {
   };
 }
 
-test('accepts broadcast links and rejects unrelated hosts, handles and malformed IDs', () => {
+test('accepts broadcast links and channel handles, and rejects unrelated hosts and malformed IDs', () => {
   for (const value of [room.youtubeLiveId, `https://www.youtube.com/watch?v=${room.youtubeLiveId}&feature=share`,
     `youtube.com/live/${room.youtubeLiveId}?si=abc`, `https://youtu.be/${room.youtubeLiveId}?t=10`,
     `https://m.youtube.com/watch?v=${room.youtubeLiveId}`, `https://www.youtube.com/embed/${room.youtubeLiveId}`]) {
     assert.equal(youtubeLiveId(value), room.youtubeLiveId);
   }
-  for (const value of [undefined, {}, 'abc', '@channel', 'https://youtube.com/@channel/live',
+  for (const value of ['@JexRowl', 'https://www.youtube.com/@JexRowl', 'youtube.com/@JexRowl/live']) {
+    assert.equal(youtubeLiveId(value), '@JexRowl');
+  }
+  for (const value of [undefined, {}, 'abc', '@x', 'https://youtube.com/@x/live',
     `https://youtube.com.evil.test/watch?v=${room.youtubeLiveId}`, `https://evil.test/${room.youtubeLiveId}`,
     `https://youtube.com@evil.test/watch?v=${room.youtubeLiveId}`, `ftp://youtube.com/watch?v=${room.youtubeLiveId}`]) {
     assert.equal(youtubeLiveId(value), '');
@@ -54,12 +57,26 @@ test('creates YouTube rooms and preserves the legacy TikTok input', async () => 
   assert.equal(youtube.youtubeLiveId, room.youtubeLiveId);
   assert.equal(youtube.platform, 'youtube');
   assert.equal(youtube.tiktokUsername, '');
+  const youtubeHandle = await rooms.create('owner', { ...base, platform: 'youtube', youtubeLiveId: 'https://youtube.com/@JexRowl/live' });
+  assert.equal(youtubeHandle.youtubeLiveId, '@JexRowl');
   const tiktok = await rooms.create('owner', { ...base, tiktokUsername: 'tiktok.com/@demo_user/live' });
   assert.equal(tiktok.platform, 'tiktok');
   assert.equal(tiktok.tiktokUsername, 'demo_user');
   await assert.rejects(rooms.create('owner', { ...base, platform: 'youtube', youtubeLiveId: 'invalid' }));
   await assert.rejects(rooms.create('owner', { ...base, platform: 'invalid', tiktokUsername: 'demo_user' }));
-  assert.equal(stored.length, 2);
+  assert.equal(stored.length, 3);
+});
+
+test('connects a handle so the library discovers the current broadcast', async () => {
+  const { service, connections } = setup(async function () {
+    this.liveId = 'current1234';
+    this.emit('start', this.liveId);
+    return true;
+  });
+  await service.connect({ ...room, youtubeLiveId: '@JexRowl' });
+  assert.equal(connections.length, 1);
+  assert.equal(service.snapshot(room.id).status.roomId, 'current1234');
+  assert.match(service.snapshot(room.id).status.message, /@JexRowl/);
 });
 
 test('maps chat and emoji to guests/comments, deduplicates and isolates rooms', async () => {

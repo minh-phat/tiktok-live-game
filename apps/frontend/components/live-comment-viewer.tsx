@@ -191,7 +191,7 @@ function Dashboard({ rooms, onOpen, onCreated }: { rooms: Room[]; onOpen: (room:
             <label>Tên phòng <input value={name} onChange={(event) => setName(event.target.value)} minLength={3} maxLength={80} required placeholder="Đặt tên quán của bạn" /></label>
             <label>Nền tảng LIVE <select value={platform} onChange={(event) => { setPlatform(event.target.value as LivePlatform); setError(''); }} disabled={busy}><option value="tiktok">TikTok LIVE</option><option value="youtube">YouTube LIVE</option></select></label>
             {platform === 'youtube'
-              ? <label>Link hoặc video ID YouTube LIVE <input value={youtubeLiveId} onChange={(event) => setYoutubeLiveId(event.target.value)} required placeholder="https://www.youtube.com/watch?v=..." /><small>Nhập link phiên đang phát công khai, có bật chat. Khách xuất hiện khi gửi bình luận.</small></label>
+              ? <label>YouTube handle hoặc link LIVE <input value={youtubeLiveId} onChange={(event) => setYoutubeLiveId(event.target.value)} required placeholder="@JexRowl" /><small>Nên nhập handle (ví dụ @JexRowl) để tự kết nối phiên live hiện tại của kênh. Kênh phải phát công khai và bật chat.</small></label>
               : <label>TikTok username hoặc link LIVE <input value={tiktokUsername} onChange={(event) => setTiktokUsername(event.target.value)} required placeholder="@username hoặc tiktok.com/@username/live" /></label>}
           </div>
           {error && <p className="form-error" role="alert">{error}</p>}
